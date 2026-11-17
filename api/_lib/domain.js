@@ -1,6 +1,6 @@
 // Nghiệp vụ: giải mã QR, dựng thông tin chi tiết / cụm / sản phẩm, sản lượng theo công đoạn.
 import { HttpError, norm, num, parseDay, vnNow } from './util.js';
-import { teamCoder, teamList, canWrite } from './data.js';
+import { teamCoder, teamList, teamIdToCode, canWrite } from './data.js';
 
 export const SCAN_TABLES = ['mo_routing', 'mo', 'mo_detail', 'product', 'bom_wood', 'pallet', 'pallet_log'];
 
@@ -13,9 +13,18 @@ export function parseCode(raw, t) {
   const code = String(raw || '').trim().toUpperCase().replace(/\s+/g, '');
   if (!code) throw new HttpError(400, 'Chưa có mã QR');
   if (code.length > 80) throw new HttpError(400, 'Mã QR quá dài');
+  // Cấu trúc QR = part_ref + "-" + team_id (lấy đúng từ tab To, vd "…-W003-T-TC").
+  // team_id dài nhất được thử trước để không cắt nhầm.
+  const ids = t.to.rows.map((r) => String(r.team_id || '').trim().toUpperCase()).filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+  for (const id of ids) {
+    if (code.endsWith(`-${id}`) && code.length > id.length + 1) {
+      return { code, partRef: code.slice(0, -(id.length + 1)), team: teamIdToCode(id) };
+    }
+  }
+  // Dự phòng: mã tổ ngắn "…-W003-TC"
   const codes = new Set(teamList(t).map((x) => x.code));
-  // Phiếu in mã tổ theo team_id: "…-W003-T-TC"; cũng nhận dạng ngắn "…-W003-TC".
-  const m = /^(.+)-T-([A-Z]{2,3})$/.exec(code) || /^(.+)-([A-Z]{2,3})$/.exec(code);
+  const m = /^(.+)-([A-Z]{2,3})$/.exec(code);
   if (m && codes.has(m[2])) return { code, partRef: m[1], team: m[2] };
   // Phiếu cũ in mã công đoạn (mo_route_id, vd "…-W002-S06") → chi tiết + tổ của công đoạn đó
   const step = t.mo_routing?.rows.find((r) => String(r.mo_route_id).toUpperCase() === code);

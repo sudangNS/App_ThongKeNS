@@ -8,7 +8,7 @@ Không cần build, không có thư viện npm.
 
 ## Mã QR
 
-`<part_ref>-<team_id>`, giống phiếu pallet đang in. Ví dụ: `LSX-02-1626-03-W003-T-TC`.
+`<part_ref>-<team_id>`, với `team_id` lấy đúng theo tab **To** (thêm/đổi tổ trong Sheet là app tự hiểu). Ví dụ: `LSX-02-1626-03-W003-T-TC`.
 App cũng nhận dạng ngắn `LSX-02-1626-03-W003-TC` và mã công đoạn `mo_route_id` (vd `…-W002-S06`).
 
 | Mã tổ | `MO Routing.stage_group` | Tab `To` |
