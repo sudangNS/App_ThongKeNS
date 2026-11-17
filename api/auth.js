@@ -1,7 +1,7 @@
 // GET  /api/auth  → { clientId, user | null }
 // POST /api/auth  { credential } → đăng nhập bằng ID token Google
 // DELETE /api/auth → đăng xuất
-import { handler, send, readBody, HttpError } from './_lib/util.js';
+import { handler, send, readBody, HttpError, env } from './_lib/util.js';
 import { load, accessOf, teamList } from './_lib/data.js';
 import { verifyGoogleIdToken, sessionCookie, clearCookie, sessionOf } from './_lib/session.js';
 
@@ -9,7 +9,7 @@ const view = (acc, t, picture) => ({ ...acc, picture: picture || '', teamList: t
 
 export default handler({
   async GET(req, res) {
-    const clientId = process.env.GOOGLE_CLIENT_ID || '';
+    const clientId = env('GOOGLE_CLIENT_ID');
     const s = sessionOf(req);
     if (!s) return send(res, 200, { clientId, user: null });
     const t = await load(['users', 'to', 'works']);

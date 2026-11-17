@@ -1,13 +1,13 @@
 // Đăng nhập Google (ID token từ Google Identity Services) + cookie phiên ký HMAC.
 import crypto from 'node:crypto';
-import { HttpError } from './util.js';
+import { HttpError, env } from './util.js';
 import { load, accessOf } from './data.js';
 
 const COOKIE = 'tk_sess';
-const SESSION_HOURS = Number(process.env.SESSION_HOURS) || 12;
+const SESSION_HOURS = Number(env('SESSION_HOURS')) || 12;
 
 function secret() {
-  const s = process.env.SESSION_SECRET;
+  const s = env('SESSION_SECRET');
   if (!s || s.length < 32) throw new HttpError(500, 'Chưa cấu hình SESSION_SECRET (≥ 32 ký tự)');
   return s;
 }
@@ -27,7 +27,7 @@ async function googleKeys(force) {
 }
 
 export async function verifyGoogleIdToken(credential) {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientId = env('GOOGLE_CLIENT_ID');
   if (!clientId) throw new HttpError(500, 'Chưa cấu hình GOOGLE_CLIENT_ID');
   const parts = String(credential || '').split('.');
   if (parts.length !== 3) throw new HttpError(400, 'Token đăng nhập không hợp lệ');
@@ -56,7 +56,7 @@ export async function verifyGoogleIdToken(credential) {
   if (payload.email_verified !== true && payload.email_verified !== 'true') throw new HttpError(401, 'Email Google chưa được xác minh');
 
   const email = String(payload.email || '').toLowerCase();
-  const domain = (process.env.ALLOWED_DOMAIN || '').toLowerCase().replace(/^@/, '');
+  const domain = env('ALLOWED_DOMAIN').toLowerCase().replace(/^@/, '');
   if (domain && !email.endsWith(`@${domain}`)) throw new HttpError(403, `Chỉ chấp nhận email @${domain}`);
   return { email, name: payload.name || email, picture: payload.picture || '' };
 }

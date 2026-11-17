@@ -126,3 +126,6 @@ export function colLetter(i) {
   for (i += 1; i > 0; i = Math.floor((i - 1) / 26)) s = String.fromCharCode(65 + ((i - 1) % 26)) + s;
   return s;
 }
+
+/** Đọc biến môi trường, bỏ khoảng trắng/xuống dòng thừa khi dán giá trị. */
+export const env = (k) => String(process.env[k] ?? '').trim();

@@ -4,13 +4,13 @@
 //   { action: "cancel", code, log_id }
 // Ghi vào tab Pallet Log (và Pallet khi tạo pallet mới). Chỉ nhận công đoạn của chi tiết
 // thuộc đúng tổ trong mã QR → không thể nhập lẫn nhiều tổ trong 1 lần.
-import { handler, send, readBody, HttpError, newId, vnNow, textCell, norm, num, parseDay, isoToVn, daysBetween } from './_lib/util.js';
+import { handler, send, readBody, HttpError, newId, vnNow, textCell, norm, num, parseDay, isoToVn, daysBetween, env } from './_lib/util.js';
 import { load, appendObjects } from './_lib/data.js';
 import { requireUser } from './_lib/session.js';
 import { buildContext, SCAN_TABLES, CANCEL_PREFIX } from './_lib/domain.js';
 
 const MAX_QTY = 100_000;
-const BACKDATE = () => Number(process.env.MAX_BACKDATE_DAYS ?? 7);
+const BACKDATE = () => Number(env('MAX_BACKDATE_DAYS') || 7);
 
 export default handler({
   async POST(req, res) {

@@ -1,23 +1,23 @@
 // Gọi Google Sheets API bằng Service Account (không dùng thư viện ngoài).
 import crypto from 'node:crypto';
-import { HttpError } from './util.js';
+import { HttpError, env } from './util.js';
 
 const SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
 const API = 'https://sheets.googleapis.com/v4/spreadsheets';
 
-export const sheetId = () => process.env.SHEET_ID || '1VVW7Zrdw-KmO2HLIh1nchKE8DRGWDtd2hCrS-e_aKUU';
+export const sheetId = () => env('SHEET_ID') || '1VVW7Zrdw-KmO2HLIh1nchKE8DRGWDtd2hCrS-e_aKUU';
 
 function credentials() {
-  if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+  if (env('GOOGLE_SERVICE_ACCOUNT_JSON')) {
     try {
-      const j = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+      const j = JSON.parse(env('GOOGLE_SERVICE_ACCOUNT_JSON'));
       return { email: j.client_email, key: j.private_key };
     } catch {
       throw new HttpError(500, 'GOOGLE_SERVICE_ACCOUNT_JSON không phải JSON hợp lệ');
     }
   }
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const key = (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
+  const email = env('GOOGLE_SERVICE_ACCOUNT_EMAIL');
+  const key = env('GOOGLE_PRIVATE_KEY').replace(/\\n/g, '\n');
   if (!email || !key) throw new HttpError(500, 'Chưa cấu hình Service Account (xem README)');
   return { email, key };
 }
