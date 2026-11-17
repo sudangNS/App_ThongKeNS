@@ -75,7 +75,7 @@ Repo: `https://github.com/sudangNS/App_ThongKeNS` (nhánh `main`). Mỗi lần p
    - Contact email: email của bạn → Next → tick đồng ý → **Create**.
 3. **Tạo Client**: vào **Clients** (hoặc *Credentials → Create credentials → OAuth client ID*).
    - Application type: **Web application**. Name: `ThongKeNS Web`.
-   - **Authorized JavaScript origins** → **Add URI** → dán **APP_URL**, ví dụ `https://thongke-ns.vercel.app`. Không có dấu `/` ở cuối.
+   - **Authorized JavaScript origins** → **Add URI** → dán **APP_URL** = `https://thongkenghiason.vercel.app`. Không có dấu `/` ở cuối.
    - *Authorized redirect URIs*: để trống.
    - Bấm **Create** rồi copy **Client ID** (dạng `xxxx.apps.googleusercontent.com`). Từ đây gọi là **CLIENT_ID**.
 
@@ -97,7 +97,7 @@ Vẫn trong project `ThongKeNS`:
 
 ### Bước 5 – Nhập khoá vào Vercel và deploy lại
 
-1. Vercel → project `thongke-ns` → **Settings → Environment Variables**. Thêm từng biến, áp cho cả Production và Preview:
+1. Vercel → project `thongkenghiason` → **Settings → Environment Variables**. Thêm từng biến, áp cho cả Production và Preview:
 
    | Key | Value |
    |---|---|
