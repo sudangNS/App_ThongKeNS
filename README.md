@@ -57,18 +57,12 @@ App deploy lần đầu khi chưa có khoá vẫn mở được, chỉ báo *“
 
 Repo: `https://github.com/sudangNS/App_ThongKeNS` (nhánh `main`). Mỗi lần push lên `main` sau này, Vercel sẽ tự deploy lại.
 
-### Bước 2 – Tạo project trên Vercel để lấy địa chỉ app
+### Bước 2 – Project Vercel ✅ (đã làm)
 
-1. Vào <https://vercel.com>, chọn **Continue with GitHub** và đăng nhập tài khoản GitHub `sudangNS`.
-2. Bấm **Add New… → Project**.
-3. Ở *Import Git Repository*, chọn `App_ThongKeNS` rồi bấm **Import**.
-   Nếu không thấy repo: bấm **Adjust GitHub App Permissions**, cấp quyền cho repo `App_ThongKeNS`, rồi quay lại.
-4. Màn hình cấu hình:
-   - **Project Name**: đặt tên ngắn, ví dụ `thongke-ns`. Tên này sẽ thành địa chỉ app `https://thongke-ns.vercel.app`.
-   - **Framework Preset**: `Other`. Không sửa Build/Output (file `vercel.json` đã cấu hình sẵn).
-   - Chưa cần nhập Environment Variables.
-5. Bấm **Deploy** và đợi khoảng 1 phút.
-6. Vào **Settings → Domains** và ghi lại địa chỉ, ví dụ `https://thongke-ns.vercel.app`. Từ đây gọi là **APP_URL**.
+- Project `thongkenghiason` (team `nghia-son`), nối với GitHub `sudangNS/App_ThongKeNS`. **Mỗi lần push lên `main`, Vercel tự deploy bản chính.**
+- **APP_URL = `https://thongkenghiason.vercel.app`**. Function chạy ở Singapore (`sin1`).
+- Đã đặt sẵn `SESSION_SECRET` và `ALLOWED_DOMAIN`.
+- Kiểm tra cấu hình: mở `APP_URL/api/health`. Kết quả chỉ ghi có/không cho từng mục, không lộ giá trị.
 
 ### Bước 3 – Google Cloud: tạo OAuth Client ID (cho nút “Đăng nhập Google”)
 
