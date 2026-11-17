@@ -16,6 +16,13 @@ export function parseCode(raw, t) {
   const codes = new Set(teamList(t).map((x) => x.code));
   const m = /^(.+)-([A-Z]{2,3})$/.exec(code);
   if (m && codes.has(m[2])) return { code, partRef: m[1], team: m[2] };
+  // Phiếu cũ in mã công đoạn (mo_route_id, vd "…-W002-S06") → chi tiết + tổ của công đoạn đó
+  const step = t.mo_routing?.rows.find((r) => String(r.mo_route_id).toUpperCase() === code);
+  if (step) {
+    const team = teamCoder(t)(step);
+    const partRef = String(step.part_ref).toUpperCase();
+    return { code: team ? `${partRef}-${team}` : partRef, partRef, team };
+  }
   return { code, partRef: code, team: '' };
 }
 
