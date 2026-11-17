@@ -150,6 +150,12 @@ async function startCamera() {
   if (state.scanner) return;
   $('#cam-msg').textContent = '';
   if (!window.Html5Qrcode) { $('#cam-msg').textContent = 'Chưa tải được thư viện quét QR'; return; }
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+    $('#cam-msg').textContent = 'Trình duyệt này không cho mở camera. Hãy mở bằng Chrome/Safari (không mở trong Zalo/Messenger), hoặc nhập mã bên dưới.';
+    return;
+  }
+  // Khung phải hiện ra TRƯỚC khi start: thư viện lấy chiều rộng khung để tạo video.
+  $('#reader').classList.add('on');
   const sc = new Html5Qrcode('reader', { formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE], verbose: false });
   state.scanner = sc;
   $('#btn-cam').textContent = 'Tắt camera';
@@ -168,6 +174,8 @@ async function startCamera() {
     store.set('camOK', true);
   } catch (e) {
     state.scanner = null;
+    $('#reader').classList.remove('on');
+    $('#reader').innerHTML = '';
     $('#btn-cam').textContent = 'Bật camera quét QR';
     store.set('camOK', false);
     $('#cam-msg').textContent = `Không mở được camera: ${e?.message || e}. Hãy cho phép quyền camera, hoặc nhập mã bên dưới.`;
@@ -178,6 +186,7 @@ function stopCamera() {
   const sc = state.scanner;
   state.scanner = null;
   $('#btn-cam').textContent = 'Bật camera quét QR';
+  $('#reader').classList.remove('on');
   if (sc) sc.stop().then(() => sc.clear()).catch(() => {});
 }
 
