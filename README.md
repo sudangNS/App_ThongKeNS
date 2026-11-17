@@ -48,32 +48,98 @@ Không cần build, không có thư viện npm.
 4. Người nhập được tự huỷ dòng của mình **trong ngày**. Quá ngày thì quản lý huỷ.
 5. Ngày làm không được ở tương lai. Người không phải quản lý chỉ được nhập lùi tối đa `MAX_BACKDATE_DAYS` ngày (mặc định 7).
 
-## Triển khai
+## Triển khai (làm theo đúng thứ tự)
 
-### 1. Google Cloud (1 project)
+Vì sao phải theo thứ tự này: OAuth Client ID (bước 3) cần biết địa chỉ app, mà địa chỉ app chỉ có sau khi tạo project trên Vercel (bước 2).
+App deploy lần đầu khi chưa có khoá vẫn mở được, chỉ báo *“Máy chủ chưa cấu hình GOOGLE_CLIENT_ID”*. Đó là bình thường.
 
-1. **OAuth Client ID**: APIs & Services → Credentials → Create credentials → OAuth client ID → *Web application*.
-   Ở *Authorized JavaScript origins*, thêm `https://<tên-app>.vercel.app` (và tên miền riêng nếu có).
-   Lấy Client ID để đặt vào `GOOGLE_CLIENT_ID`. OAuth consent screen chọn *Internal* nếu dùng Google Workspace công ty.
-2. **Service Account**: bật *Google Sheets API*. Tạo Service Account, vào Keys → Add key → JSON và tải file JSON về.
-3. **Chia sẻ Google Sheet** cho email của Service Account (`…@….iam.gserviceaccount.com`) với quyền **Editor**.
+### Bước 1 – Đưa code lên GitHub ✅ (đã làm)
 
-### 2. Vercel
+Repo: `https://github.com/sudangNS/App_ThongKeNS` (nhánh `main`). Mỗi lần push lên `main` sau này, Vercel sẽ tự deploy lại.
 
-1. Đẩy repo lên GitHub → Vercel → *Add New Project* → import repo. Framework: **Other**. Không cần build command.
-2. Settings → Environment Variables (xem `.env.example`):
+### Bước 2 – Tạo project trên Vercel để lấy địa chỉ app
 
-| Biến | Bắt buộc | Ghi chú |
-|---|---|---|
-| `GOOGLE_CLIENT_ID` | ✔ | Client ID ở bước 1.1 |
-| `GOOGLE_SERVICE_ACCOUNT_JSON` | ✔* | Nội dung file JSON key. *Hoặc dùng cặp `GOOGLE_SERVICE_ACCOUNT_EMAIL` + `GOOGLE_PRIVATE_KEY` |
-| `SESSION_SECRET` | ✔ | Chuỗi ngẫu nhiên ≥ 32 ký tự |
-| `SHEET_ID` | | Mặc định là sheet Data NSCN |
-| `ALLOWED_DOMAIN` | | VD `nghiason.com.vn` |
-| `SESSION_HOURS` | | Mặc định 12 |
-| `MAX_BACKDATE_DAYS` | | Mặc định 7 |
+1. Vào <https://vercel.com>, chọn **Continue with GitHub** và đăng nhập tài khoản GitHub `sudangNS`.
+2. Bấm **Add New… → Project**.
+3. Ở *Import Git Repository*, chọn `App_ThongKeNS` rồi bấm **Import**.
+   Nếu không thấy repo: bấm **Adjust GitHub App Permissions**, cấp quyền cho repo `App_ThongKeNS`, rồi quay lại.
+4. Màn hình cấu hình:
+   - **Project Name**: đặt tên ngắn, ví dụ `thongke-ns`. Tên này sẽ thành địa chỉ app `https://thongke-ns.vercel.app`.
+   - **Framework Preset**: `Other`. Không sửa Build/Output (file `vercel.json` đã cấu hình sẵn).
+   - Chưa cần nhập Environment Variables.
+5. Bấm **Deploy** và đợi khoảng 1 phút.
+6. Vào **Settings → Domains** và ghi lại địa chỉ, ví dụ `https://thongke-ns.vercel.app`. Từ đây gọi là **APP_URL**.
 
-3. Deploy. Camera chỉ chạy trên HTTPS, và Vercel đã có sẵn HTTPS.
+### Bước 3 – Google Cloud: tạo OAuth Client ID (cho nút “Đăng nhập Google”)
+
+Đăng nhập <https://console.cloud.google.com> bằng email công ty (`@nghiason.com.vn`).
+
+1. **Tạo project**: bấm ô chọn project ở thanh trên cùng → **New Project**. Đặt tên `ThongKeNS` → **Create**. Sau đó chọn project vừa tạo.
+2. **Màn hình đồng ý (consent screen)**: menu ☰ → **APIs & Services → OAuth consent screen** (giao diện mới gọi là **Google Auth Platform**) → **Get started**.
+   - App name: `Thống kê NS`. User support email: email của bạn → Next.
+   - Audience: **Internal**, để chỉ người có email công ty đăng nhập được → Next.
+   - Contact email: email của bạn → Next → tick đồng ý → **Create**.
+3. **Tạo Client**: vào **Clients** (hoặc *Credentials → Create credentials → OAuth client ID*).
+   - Application type: **Web application**. Name: `ThongKeNS Web`.
+   - **Authorized JavaScript origins** → **Add URI** → dán **APP_URL**, ví dụ `https://thongke-ns.vercel.app`. Không có dấu `/` ở cuối.
+   - *Authorized redirect URIs*: để trống.
+   - Bấm **Create** rồi copy **Client ID** (dạng `xxxx.apps.googleusercontent.com`). Từ đây gọi là **CLIENT_ID**.
+
+### Bước 4 – Google Cloud: tạo Service Account (để app đọc/ghi Sheet)
+
+Vẫn trong project `ThongKeNS`:
+
+1. **Bật API**: ☰ → **APIs & Services → Library** → tìm `Google Sheets API` → **Enable**.
+2. **Tạo Service Account**: ☰ → **IAM & Admin → Service Accounts** → **Create service account**.
+   - Name: `thongke-sheet` → **Create and continue**. Bỏ qua phần cấp role → **Done**.
+   - Copy email của nó, dạng `thongke-sheet@thongkens-xxxx.iam.gserviceaccount.com`. Từ đây gọi là **SA_EMAIL**.
+3. **Tạo khoá**: bấm vào service account vừa tạo → tab **Keys** → **Add key → Create new key → JSON → Create**.
+   Máy sẽ tải về 1 file `.json`. Đây là khoá bí mật: không gửi qua chat, không đưa vào thư mục code.
+   > Nếu báo lỗi *“Service account key creation is disabled”*: tổ chức đang bật chính sách chặn tạo khoá.
+   > Cần quản trị Google Workspace vào **IAM & Admin → Organization Policies**, tìm `iam.disableServiceAccountKeyCreation`,
+   > và tắt chính sách này riêng cho project `ThongKeNS`.
+4. **Chia sẻ Sheet**: mở Google Sheet `Data NSCN` → **Share** → dán **SA_EMAIL** → quyền **Editor** → bỏ tick *Notify people* → **Share**.
+   > Nếu Google báo không thể chia sẻ ra ngoài tổ chức: quản trị Workspace cần cho phép chia sẻ với email `iam.gserviceaccount.com`.
+
+### Bước 5 – Nhập khoá vào Vercel và deploy lại
+
+1. Vercel → project `thongke-ns` → **Settings → Environment Variables**. Thêm từng biến, áp cho cả Production và Preview:
+
+   | Key | Value |
+   |---|---|
+   | `GOOGLE_CLIENT_ID` | **CLIENT_ID** ở bước 3 |
+   | `GOOGLE_SERVICE_ACCOUNT_JSON` | Mở file `.json` ở bước 4 bằng Notepad, copy **toàn bộ** nội dung rồi dán vào |
+   | `SESSION_SECRET` | Chuỗi ngẫu nhiên ≥ 32 ký tự |
+   | `ALLOWED_DOMAIN` | `nghiason.com.vn` |
+
+2. **Deployments** → bản deploy mới nhất → nút **⋯** → **Redeploy**. Biến môi trường chỉ có hiệu lực ở lần deploy mới.
+
+### Bước 6 – Cấp quyền người dùng trong Sheet
+
+- Tab **Users**: mỗi người 1 dòng `email | full_name | role | active=TRUE`.
+- Tab **To**: điền email thống kê của từng tổ vào cột `thong_ke_emails`, nhiều email cách nhau bằng dấu phẩy.
+  (Xem mục *Phân quyền* ở trên.)
+
+### Bước 7 – Kiểm tra
+
+1. Mở **APP_URL** trên điện thoại và đăng nhập Google.
+2. Mở `APP_URL/?code=LSX-02-1626-01-W002-SC`, hoặc quét QR trên một phiếu pallet đã in. Phải thấy thông tin Tay ghế / Cụm hông / Zamora Lounge Chair.
+3. Nhập thử 1 số lượng nhỏ, kiểm tra trong tab `Pallet Log` có dòng mới, rồi bấm **Huỷ** để trả lại số cũ.
+
+| Thông báo lỗi | Cách xử lý |
+|---|---|
+| `Máy chủ chưa cấu hình GOOGLE_CLIENT_ID` | Chưa làm bước 5 hoặc chưa Redeploy |
+| Nút Google báo `origin_mismatch` / `invalid_client` | **APP_URL** ở bước 3.3 sai (thừa `/`, thiếu `https://`, sai tên) |
+| `Service Account chưa được chia sẻ quyền Sheet` | Làm lại bước 4.4 |
+| `Email … chưa có trong tab Users` | Làm bước 6 |
+
+### Biến môi trường tuỳ chọn
+
+| Biến | Mặc định |
+|---|---|
+| `SHEET_ID` | Sheet Data NSCN |
+| `SESSION_HOURS` | 12 (giờ phải đăng nhập lại) |
+| `MAX_BACKDATE_DAYS` | 7 (số ngày được nhập lùi) |
 
 ## Cấu trúc
 
