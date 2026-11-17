@@ -120,6 +120,11 @@ test('nhập nhiều công đoạn cùng lúc với pallet mới', async () => {
 test('cảnh báo vượt công đoạn trước cần xác nhận; chặn công đoạn của tổ khác', async () => {
   const cookie = await login('tk.sc@ns.vn');
   const scan = await call('scan', { url: `/api/scan?code=${W2}-SC`, cookie });
+  // Mã in trên phiếu dùng team_id: "…-T-SC" phải ra cùng chi tiết + tổ
+  const printed = await call('scan', { url: `/api/scan?code=${W2}-T-SC`, cookie });
+  assert.equal(printed.status, 200, JSON.stringify(printed.json));
+  assert.equal(printed.json.team.code, 'SC');
+  assert.deepEqual(printed.json.teamSteps.map((s) => s.id), scan.json.teamSteps.map((s) => s.id));
   const pallet = scan.json.pallets[0].id;
   const body = { action: 'add', code: `${W2}-SC`, pallet_id: pallet, entries: [{ id: `${W2}-S02`, qty: 50 }] };
   const w = await call('output', { method: 'POST', cookie, body });

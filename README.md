@@ -8,7 +8,8 @@ Không cần build, không có thư viện npm.
 
 ## Mã QR
 
-`<part_ref>-<mã tổ>`, giống phiếu pallet do app *Thong_Ke_NSCN* in. Ví dụ: `LSX-02-1626-01-W004-TC`.
+`<part_ref>-<team_id>`, giống phiếu pallet đang in. Ví dụ: `LSX-02-1626-03-W003-T-TC`.
+App cũng nhận dạng ngắn `LSX-02-1626-03-W003-TC` và mã công đoạn `mo_route_id` (vd `…-W002-S06`).
 
 | Mã tổ | `MO Routing.stage_group` | Tab `To` |
 |---|---|---|

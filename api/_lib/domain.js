@@ -14,7 +14,8 @@ export function parseCode(raw, t) {
   if (!code) throw new HttpError(400, 'Chưa có mã QR');
   if (code.length > 80) throw new HttpError(400, 'Mã QR quá dài');
   const codes = new Set(teamList(t).map((x) => x.code));
-  const m = /^(.+)-([A-Z]{2,3})$/.exec(code);
+  // Phiếu in mã tổ theo team_id: "…-W003-T-TC"; cũng nhận dạng ngắn "…-W003-TC".
+  const m = /^(.+)-T-([A-Z]{2,3})$/.exec(code) || /^(.+)-([A-Z]{2,3})$/.exec(code);
   if (m && codes.has(m[2])) return { code, partRef: m[1], team: m[2] };
   // Phiếu cũ in mã công đoạn (mo_route_id, vd "…-W002-S06") → chi tiết + tổ của công đoạn đó
   const step = t.mo_routing?.rows.find((r) => String(r.mo_route_id).toUpperCase() === code);
