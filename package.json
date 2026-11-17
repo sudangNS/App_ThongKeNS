@@ -1,0 +1,12 @@
+{
+  "name": "app-thong-ke-ns",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Quét QR phiếu pallet, xem thông tin chi tiết/cụm/sản phẩm và nhập sản lượng theo tổ (Google Sheet).",
+  "type": "module",
+  "engines": { "node": "22.x" },
+  "scripts": {
+    "dev": "vercel dev",
+    "test": "node --test test/*.test.js"
+  }
+}

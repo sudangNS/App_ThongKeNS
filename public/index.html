@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f5132">
+  <title>Thống kê NS</title>
+  <meta name="description" content="Quét QR phiếu pallet, xem thông tin chi tiết – cụm – sản phẩm và nhập sản lượng theo tổ.">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="/" data-nav="home">Thống kê NS</a>
+    <div id="who" class="who" hidden>
+      <span id="who-name"></span>
+      <button id="btn-logout" class="link" type="button">Đăng xuất</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="v-loading" class="center"><div class="spinner" aria-label="Đang tải"></div></section>
+
+    <section id="v-login" class="center" hidden>
+      <div class="card login">
+        <h1>Đăng nhập</h1>
+        <p class="muted">Dùng tài khoản Google công ty. Email phải có trong danh sách người dùng của hệ thống.</p>
+        <div id="gbtn"></div>
+        <p id="login-msg" class="msg" role="alert"></p>
+      </div>
+    </section>
+
+    <section id="v-scan" hidden>
+      <div class="card">
+        <div id="reader" class="reader"></div>
+        <div class="row gap">
+          <button id="btn-cam" class="btn primary grow" type="button">Bật camera quét QR</button>
+        </div>
+        <p id="cam-msg" class="msg" role="alert"></p>
+        <form id="f-manual" class="row gap" autocomplete="off">
+          <input id="in-code" class="grow" placeholder="Hoặc nhập / dùng máy quét: LSX-…-W004-TC" aria-label="Mã QR">
+          <button class="btn" type="submit">Mở</button>
+        </form>
+      </div>
+      <div id="recent"></div>
+    </section>
+
+    <section id="v-item" hidden></section>
+  </main>
+
+  <dialog id="dlg">
+    <form method="dialog">
+      <h2 id="dlg-title"></h2>
+      <div id="dlg-body"></div>
+      <div class="row gap end">
+        <button value="cancel" class="btn">Quay lại</button>
+        <button value="ok" class="btn primary" id="dlg-ok">Đồng ý</button>
+      </div>
+    </form>
+  </dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script src="/vendor/html5-qrcode.min.js" defer></script>
+  <script src="/app.js" defer></script>
+</body>
+</html>
