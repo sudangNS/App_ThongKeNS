@@ -577,3 +577,23 @@ async function cancelLog(id) {
     $('#login-msg').textContent = `Không kết nối được máy chủ: ${e.message}`;
   }
 })();
+
+/* ---------------- Cài app (PWA) ---------------- */
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+}
+let installEvt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  installEvt = e;
+  $('#btn-install').hidden = false;
+});
+$('#btn-install').addEventListener('click', async () => {
+  if (!installEvt) return;
+  installEvt.prompt();
+  await installEvt.userChoice.catch(() => {});
+  installEvt = null;
+  $('#btn-install').hidden = true;
+});
+window.addEventListener('appinstalled', () => { $('#btn-install').hidden = true; });
