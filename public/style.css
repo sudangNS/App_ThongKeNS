@@ -14,6 +14,10 @@
   --good: #146c43;
   --bar: #cfd8d3;
   --radius: 12px;
+  /* Cấp cha – con: SP đậm → Cụm vừa → Chi tiết nhạt (cùng tông xanh thương hiệu) */
+  --lv-sp: #0f5132; --lv-sp-ink: #ffffff;
+  --lv-cum: #2d7a55; --lv-cum-ink: #ffffff;
+  --lv-ct: #e3f1ea; --lv-ct-ink: #0f5132;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -21,6 +25,7 @@
     --bg: #0f1412; --card: #18201c; --text: #e6ece9; --muted: #9aa8a1; --line: #2b3631;
     --brand: #3fa37a; --brand-ink: #06120d; --brand-soft: #1d3329; --warn: #f0b860; --warn-soft: #3a2c12;
     --bad: #ff8a80; --bad-soft: #3d1d1a; --good: #5fd29b; --bar: #34413b;
+    --lv-sp: #3fa37a; --lv-sp-ink: #06120d; --lv-cum: #2a6b4e; --lv-cum-ink: #eaf5ef; --lv-ct: #1d3329; --lv-ct-ink: #7fd1ab;
     color-scheme: dark;
   }
 }
@@ -28,6 +33,7 @@
   --bg: #0f1412; --card: #18201c; --text: #e6ece9; --muted: #9aa8a1; --line: #2b3631;
   --brand: #3fa37a; --brand-ink: #06120d; --brand-soft: #1d3329; --warn: #f0b860; --warn-soft: #3a2c12;
   --bad: #ff8a80; --bad-soft: #3d1d1a; --good: #5fd29b; --bar: #34413b;
+    --lv-sp: #3fa37a; --lv-sp-ink: #06120d; --lv-cum: #2a6b4e; --lv-cum-ink: #eaf5ef; --lv-ct: #1d3329; --lv-ct-ink: #7fd1ab;
   color-scheme: dark;
 }
 
@@ -287,3 +293,52 @@ details.waiting > summary { color: var(--warn); }
 .opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line); cursor: pointer; }
 .opt:first-child { border-top: 0; }
 .opt input { width: 22px; height: 22px; min-height: 0; margin-top: 2px; flex: 0 0 auto; accent-color: var(--brand); }
+
+/* ---------- Khối có header (màn hình quét) & cấp cha – con ---------- */
+main .card { overflow: hidden; }
+/* Mọi khối có tiêu đề h2 ở đầu → thành dải header */
+main .card > h2:first-child {
+  margin: -14px -14px 12px; padding: 10px 14px; font-size: 16px;
+  background: var(--brand-soft); color: var(--brand); border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+main .card.attn > h2:first-child { background: var(--warn-soft); color: var(--warn); }
+main .card > h2:first-child .muted { color: inherit; opacity: .8; }
+
+.tree-blocks { position: relative; }
+.blk { padding-top: 0; }
+.blk-head {
+  margin: 0 -14px 10px; padding: 10px 14px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.blk-lv { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; opacity: .85; }
+.blk-title { font-size: 17px; font-weight: 700; flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.blk-now { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--card); color: var(--brand); }
+.lv-sp { background: var(--lv-sp); color: var(--lv-sp-ink); }
+.lv-cum { background: var(--lv-cum); color: var(--lv-cum-ink); }
+.lv-ct { background: var(--lv-ct); color: var(--lv-ct-ink); }
+/* Thụt lề theo cấp + đường nối cha – con */
+.blk.depth-1 { margin-left: 10px; }
+.blk.depth-2 { margin-left: 20px; }
+.blk.depth-1::before, .blk.depth-2::before {
+  content: ""; position: absolute; left: -8px; top: -12px; height: 34px; width: 6px;
+  border-left: 2px solid var(--brand); border-bottom: 2px solid var(--brand); border-bottom-left-radius: 6px;
+}
+main .card.blk { position: relative; overflow: visible; }
+.blk > .blk-head { border-radius: var(--radius) var(--radius) 0 0; }
+.blk.current { border: 2px solid var(--brand); }
+.blk.current > .blk-head { margin-left: -14px; margin-right: -14px; }
+.blk.ghost .blk-head { opacity: .75; }
+
+.lv-tag {
+  flex: 0 0 auto; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 6px; line-height: 18px;
+}
+/* Danh sách con sổ ra: header tô theo cấp */
+details.tree { border: 1px solid var(--line); border-radius: 10px; margin-top: 10px; overflow: hidden; }
+details.tree > summary.tree-head { padding: 9px 12px; color: inherit; }
+details.tree > summary.tree-head .badge { background: var(--card); color: var(--brand); }
+details.tree > summary::after { color: inherit; }
+details.tree > .tree-list { padding: 0 12px; }
+/* Nhóm công đoạn ở Trên chuyền: khi mở thì header nổi lên */
+details[open]:not(.tree) > summary { background: var(--brand-soft); color: var(--brand); margin: 0 -14px; padding: 10px 14px; }
+details.waiting[open] > summary { background: var(--warn-soft); color: var(--warn); }

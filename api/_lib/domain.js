@@ -112,7 +112,7 @@ export function buildContext(t, acc, raw) {
 
   // ----- Chi tiết -----
   const bom = t.bom_wood.rows.find((r) => r.bom_line_id === head.bom_line_id) || {};
-  const dims = [bom.thick_mm, bom.width_mm, bom.length_mm].filter((v) => String(v).trim());
+  const dims = [bom.thick_mm, bom.width_mm, bom.length_mm].filter((v) => String(v ?? '').trim());
   const isSP = norm(head.level) === 'sp';
   const partView = {
     ref: head.part_ref,

@@ -302,64 +302,92 @@ function stepChip(s, here) {
   return `<span class="${cls.join(' ')}" title="${esc(s.group)}"><b>${s.no}. ${esc(s.stage)}</b> ${fmt(s.done)}/${fmt(s.required)}</span>`;
 }
 
+/* Cấp cha – con: SP (xanh đậm) → Cụm (xanh vừa) → Chi tiết (xanh nhạt) */
+const LV = { SP: ['sp', 'Sản phẩm'], CUM: ['cum', 'Cụm'], CT: ['ct', 'Chi tiết'] };
+const lvOf = (level) => LV[String(level || '').toUpperCase()] || LV.CT;
+const lvTag = (level) => { const [k, n] = lvOf(level); return `<span class="lv-tag lv-${k}">${n}</span>`; };
+
 function progressList(items) {
-  return `<ul class="list">${items.map((c) => `<li>
-    <div class="row gap"><span class="grow">${esc(c.name)} <span class="small muted">${esc(c.kind || c.level)}</span></span>
-      <span class="small">${fmt(c.done)}/${fmt(c.required)}</span></div>
+  return `<ul class="list tree-list">${items.map((c) => `<li>
+    <div class="row gap">${lvTag(c.level)}<span class="grow"><b>${esc(c.name)}</b> <span class="small muted">${esc(c.kind || '')}</span></span>
+      <span class="small"><b>${fmt(c.done)}</b>/${fmt(c.required)}</span></div>
     <div class="small muted">Công đoạn cuối: ${esc(c.lastStage)}</div>
     <div class="bar"><i style="width:${pct(c.done, c.required)}%"></i></div>
   </li>`).join('')}</ul>`;
 }
 
+/** Khối có header theo cấp. `current` = khối của mã đang quét. */
+function lvBlock(level, title, sub, body, current, depth) {
+  const [k, n] = lvOf(level);
+  return `<section class="card blk depth-${depth}${current ? ' current' : ''}">
+    <header class="blk-head lv-${k}">
+      <span class="blk-lv">${n}</span>
+      <span class="blk-title">${esc(title)}</span>
+      ${current ? '<span class="blk-now">Đang quét</span>' : ''}
+    </header>
+    ${sub ? `<div class="code">${esc(sub)}</div>` : ''}
+    ${body}
+  </section>`;
+}
+
+/** Danh sách con sổ ra được, header tô theo cấp của con. */
+function childTree(label, items, level) {
+  if (!items.length) return '';
+  const [k] = lvOf(level);
+  return `<details class="tree"><summary class="tree-head lv-${k}"><span class="grow">${label}</span><span class="badge">${items.length}</span></summary>${progressList(items)}</details>`;
+}
+
+/** 3 khối tách riêng theo cấp cha → con: Sản phẩm → Cụm → Chi tiết. */
 function infoCard(ctx) {
   const { part, cum, product } = ctx;
   const teamCode = ctx.team?.code;
-  const isCum = (part.level || '').toUpperCase() === 'CUM';
-  const isSP = (part.level || '').toUpperCase() === 'SP';
-  return `<div class="card">
-    <div class="sec">
-      <div class="sec-label">${isSP ? 'Thành phẩm' : isCum ? 'Cụm' : 'Chi tiết'}</div>
-      <p class="title">${esc(part.name)} <span class="badge">${esc(part.kind)}</span></p>
-      <div class="code">${esc(part.ref)}</div>
-      <dl class="kv">
-        ${part.code ? `<dt>Mã</dt><dd>${esc(part.code)}</dd>` : ''}
-        ${part.size ? `<dt>Kích thước</dt><dd>${esc(part.size)}</dd>` : ''}
-        ${part.material ? `<dt>NVL</dt><dd>${esc(part.material)}${part.glue ? ` · ghép ${esc(part.glue)}` : ''}</dd>` : ''}
-        <dt>SL / SP</dt><dd>${fmt(part.qty_per_unit)}</dd>
-        <dt>SL cần</dt><dd>${fmt(part.qty_required)}</dd>
-      </dl>
-      <div class="route">${part.steps.map((s) => stepChip(s, s.team === teamCode)).join('')}</div>
-    </div>
-    ${cum && !isCum ? `<div class="sec">
-      <div class="sec-label">Cụm</div>
-      <p class="title" style="font-size:17px">${esc(cum.name)}</p>
+  const lvl = (part.level || '').toUpperCase();
+  const isCum = lvl === 'CUM';
+  const isSP = lvl === 'SP';
+  const route = (steps, mine) => `<div class="route">${steps.map((s) => stepChip(s, mine && s.team === teamCode)).join('')}</div>`;
+
+  const spBody = `
+    ${product.name_vi ? `<div class="muted">${esc(product.name_vi)}</div>` : ''}
+    <dl class="kv">
+      <dt>LSX</dt><dd>${esc(product.mo_no)}${product.lsx_stt ? ` · dòng ${esc(product.lsx_stt)}` : ''}</dd>
+      ${product.customer ? `<dt>Khách</dt><dd>${esc(product.customer)}</dd>` : ''}
+      ${product.code ? `<dt>Mã SP</dt><dd>${esc(product.code)}${product.bom_code ? ` · ${esc(product.bom_code)}` : ''}</dd>` : ''}
+      <dt>SL</dt><dd>${fmt(product.qty)} ${esc(product.unit)}</dd>
+      ${product.due_date ? `<dt>Hạn giao</dt><dd>${esc(fmtDate(product.due_date))}</dd>` : ''}
+      ${product.wood ? `<dt>Gỗ</dt><dd>${esc(product.wood)}${product.color ? ` · màu ${esc(product.color)}` : ''}</dd>` : ''}
+      ${isSP && part.size ? `<dt>Kích thước</dt><dd>${esc(part.size)}</dd>` : ''}
+    </dl>
+    ${product.steps.length ? route(product.steps, isSP) : ''}
+    ${isSP ? childTree('Cụm / chi tiết rời của sản phẩm', ctx.spChildren, 'CUM') : ''}`;
+
+  let cumBlock = '';
+  if (cum) {
+    cumBlock = lvBlock('CUM', cum.name, isCum ? part.ref : cum.ref, `
       <dl class="kv">
         ${cum.code ? `<dt>Mã</dt><dd>${esc(cum.code)}</dd>` : ''}
+        ${isCum && part.size ? `<dt>Kích thước</dt><dd>${esc(part.size)}</dd>` : ''}
+        <dt>SL / SP</dt><dd>${fmt(cum.qty_per_unit)}</dd>
         <dt>SL cần</dt><dd>${fmt(cum.qty_required)}</dd>
       </dl>
-      <div class="route">${cum.steps.map((s) => stepChip(s, false)).join('')}</div>
-      ${cum.children.length ? `<details><summary>${cum.children.length} chi tiết trong cụm</summary>${progressList(cum.children)}</details>` : ''}
-    </div>` : ''}
-    ${cum && isCum && cum.children.length ? `<div class="sec">
-      <details><summary>${cum.children.length} chi tiết trong cụm</summary>${progressList(cum.children)}</details>
-    </div>` : ''}
-    ${!cum && !isSP ? '<div class="sec"><div class="sec-label">Cụm</div><div class="muted">Chi tiết rời (ráp thẳng vào sản phẩm)</div></div>' : ''}
-    <div class="sec">
-      <div class="sec-label">Sản phẩm</div>
-      <p class="title" style="font-size:17px">${esc(product.name)}</p>
-      ${product.name_vi ? `<div class="muted">${esc(product.name_vi)}</div>` : ''}
-      <dl class="kv">
-        <dt>LSX</dt><dd>${esc(product.mo_no)}${product.lsx_stt ? ` · dòng ${esc(product.lsx_stt)}` : ''}</dd>
-        ${product.customer ? `<dt>Khách</dt><dd>${esc(product.customer)}</dd>` : ''}
-        ${product.code ? `<dt>Mã SP</dt><dd>${esc(product.code)}${product.bom_code ? ` · ${esc(product.bom_code)}` : ''}</dd>` : ''}
-        <dt>SL</dt><dd>${fmt(product.qty)} ${esc(product.unit)}</dd>
-        ${product.due_date ? `<dt>Hạn giao</dt><dd>${esc(fmtDate(product.due_date))}</dd>` : ''}
-        ${product.wood ? `<dt>Gỗ</dt><dd>${esc(product.wood)}${product.color ? ` · màu ${esc(product.color)}` : ''}</dd>` : ''}
-      </dl>
-      ${!isSP && product.steps.length ? `<div class="route">${product.steps.map((s) => stepChip(s, false)).join('')}</div>` : ''}
-      ${isSP && ctx.spChildren.length ? `<details><summary>${ctx.spChildren.length} cụm / chi tiết rời</summary>${progressList(ctx.spChildren)}</details>` : ''}
-    </div>
-  </div>`;
+      ${route(cum.steps, isCum)}
+      ${childTree('Chi tiết trong cụm', cum.children, 'CT')}`, isCum, 1);
+  } else if (!isSP) {
+    cumBlock = `<section class="card blk depth-1 ghost"><header class="blk-head lv-cum"><span class="blk-lv">Cụm</span><span class="blk-title">Chi tiết rời</span></header>
+      <p class="muted small" style="margin:0">Không thuộc cụm – ráp thẳng vào sản phẩm.</p></section>`;
+  }
+
+  const ctBlock = !isSP && !isCum ? lvBlock('CT', part.name, part.ref, `
+    <div><span class="badge">${esc(part.kind)}</span></div>
+    <dl class="kv">
+      ${part.code ? `<dt>Mã</dt><dd>${esc(part.code)}</dd>` : ''}
+      ${part.size ? `<dt>Kích thước</dt><dd>${esc(part.size)}</dd>` : ''}
+      ${part.material ? `<dt>NVL</dt><dd>${esc(part.material)}${part.glue ? ` · ghép ${esc(part.glue)}` : ''}</dd>` : ''}
+      <dt>SL / SP</dt><dd>${fmt(part.qty_per_unit)}</dd>
+      <dt>SL cần</dt><dd>${fmt(part.qty_required)}</dd>
+    </dl>
+    ${route(part.steps, true)}`, true, 2) : '';
+
+  return `<div class="tree-blocks">${lvBlock('SP', product.name, product.ref, spBody, isSP, 0)}${cumBlock}${ctBlock}</div>`;
 }
 
 /* ---------------- Nhập sản lượng ---------------- */

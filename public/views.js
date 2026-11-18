@@ -14,7 +14,7 @@ function palletItem(f, opts = {}) {
   const age = f.ageDays >= 3 ? `<span class="badge warn">${f.ageDays} ngày</span>` : f.ageDays ? `<span class="small muted">${f.ageDays} ngày</span>` : '';
   return `<li class="pal">
     <button class="item" data-open="${esc(f.code)}">
-      <div class="row gap"><b class="grow">Pallet ${esc(f.no)} · ${esc(f.partName)}</b>${age}</div>
+      <div class="row gap">${lvTag(f.level)}<b class="grow">Pallet ${esc(f.no)} · ${esc(f.partName)}</b>${age}</div>
       <div class="small muted">${esc(f.moNo)}${f.lsxStt ? ` · dòng ${esc(f.lsxStt)}` : ''} · ${esc(f.product)}</div>
       <div class="small">${esc(f.teamName)} · ${esc(f.state === 'waiting' ? f.exitStage : f.stage)}
         ${f.dest ? ` → <b>${esc(f.dest.teamName)}</b>${f.dest.kind === 'parent' ? ` (${esc(f.dest.partName)})` : ''}` : ''}</div>
@@ -107,7 +107,7 @@ function tiles(sum, pallets) {
 function wipItem(x) {
   const age = x.ageDays >= 3 ? `<span class="badge warn">${x.ageDays} ngày</span>` : x.ageDays ? `<span class="small muted">${x.ageDays} ngày</span>` : '';
   return `<li><button class="item" data-open="${esc(x.code)}">
-    <div class="row gap"><b class="grow">${esc(x.partName)}</b>${age}</div>
+    <div class="row gap">${lvTag(x.level)}<b class="grow">${esc(x.partName)}</b>${age}</div>
     <div class="small muted">${esc(x.moNo)}${x.lsxStt ? ` · dòng ${esc(x.lsxStt)}` : ''} · ${esc(x.product)}</div>
     <div class="small"><b>${fmtQ(x.qty)}</b> ${levelName[x.level] || ''} · ${fmt3(x.m3)} m³</div>
   </button></li>`;
