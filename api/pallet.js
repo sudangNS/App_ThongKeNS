@@ -1,5 +1,6 @@
 // POST /api/pallet { code, pallet_id, action: "close" | "reopen" }
-// Đóng pallet khi đã làm xong tại tổ (không nhận thêm sản lượng); mở lại chỉ dành cho quản lý.
+// close: hoàn thành pallet KHÔNG cần giao tiếp (SP đã xong bước cuối). Pallet còn tổ sau → dùng /api/handover (giao).
+// reopen: chỉ quản lý.
 import { handler, send, readBody, HttpError, vnNow, colLetter } from './_lib/util.js';
 import { load, invalidate } from './_lib/data.js';
 import { updateCells } from './_lib/google.js';
@@ -11,7 +12,7 @@ export default handler({
     const body = await readBody(req);
     const { acc, t } = await requireUser(req, SCAN_TABLES, ['pallet', 'pallet_log']);
     const ctx = buildContext(t, acc, body.code);
-    if (!ctx.team || !ctx.canWrite) throw new HttpError(403, 'Bạn không có quyền với pallet của tổ này');
+    if (!ctx.team || !(ctx.canWrite || ctx.canLead)) throw new HttpError(403, 'Bạn không có quyền với pallet của tổ này');
 
     const p = ctx.pallets.find((x) => x.id === body.pallet_id);
     const row = t.pallet.rows.find((r) => r.pallet_id === body.pallet_id);
@@ -25,6 +26,7 @@ export default handler({
     let data;
     if (body.action === 'close') {
       if (p.closed) throw new HttpError(400, `Pallet đã ở trạng thái "${p.status}"`);
+      if (p.dest) throw new HttpError(400, `Pallet còn phải giao cho ${p.dest.teamName} – tổ trưởng bấm "Giao"`);
       data = [cell('status', 'Đã xong'), cell('closed_at', vnNow().stamp), cell('closed_by', acc.email)];
     } else if (body.action === 'reopen') {
       if (!acc.admin) throw new HttpError(403, 'Chỉ quản lý được mở lại pallet');

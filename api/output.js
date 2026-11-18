@@ -8,6 +8,7 @@ import { handler, send, readBody, HttpError, newId, vnNow, textCell, norm, num, 
 import { load, appendObjects } from './_lib/data.js';
 import { requireUser } from './_lib/session.js';
 import { buildContext, SCAN_TABLES, CANCEL_PREFIX } from './_lib/domain.js';
+import { isTransferNote } from './_lib/flow.js';
 
 const MAX_QTY = 100_000;
 const BACKDATE = () => Number(env('MAX_BACKDATE_DAYS') || 7);
@@ -106,7 +107,7 @@ async function add(body, ctx, acc, t) {
     log_id: newId(), pallet_id: palletId, mo_route_id: s.id, work_date: isoToVn(day),
     start_time: '', end_time: '', worker: textCell(body.worker, 100), qty, qty_ng: ng || '',
     // Ghi chú người dùng không được giả dạng dòng huỷ
-    note: textCell(String(body.note || '').replace(/^\s*huỷ\s/i, '- '), 300), created_by: acc.email, created_at: now,
+    note: textCell(String(body.note || '').replace(/^\s*(huỷ|chuyển)\s/i, '- '), 300), created_by: acc.email, created_at: now,
   })));
   return null;
 }
@@ -116,6 +117,7 @@ async function cancel(body, ctx, acc, t) {
   const log = t.pallet_log.rows.find((l) => l.log_id && l.log_id === body.log_id && ids.has(l.mo_route_id));
   if (!log) throw new HttpError(404, 'Không tìm thấy dòng nhật ký của chi tiết/tổ này');
   if (String(log.note).startsWith(CANCEL_PREFIX)) throw new HttpError(400, 'Đây là dòng huỷ, không huỷ tiếp được');
+  if (isTransferNote(log.note)) throw new HttpError(400, 'Dòng chuyển LSX: muốn hoàn tác hãy chuyển ngược lại');
   if (t.pallet_log.rows.some((l) => String(l.note).startsWith(`${CANCEL_PREFIX}${log.log_id}`))) {
     throw new HttpError(400, 'Dòng này đã được huỷ trước đó');
   }

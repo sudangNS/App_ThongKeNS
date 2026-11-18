@@ -1,12 +1,14 @@
 // Nghiệp vụ: giải mã QR, dựng thông tin chi tiết / cụm / sản phẩm, sản lượng theo công đoạn.
 import { HttpError, norm, num, parseDay, vnNow } from './util.js';
-import { teamCoder, teamList, teamIdToCode, canWrite } from './data.js';
+import { teamCoder, teamList, teamIdToCode, canWrite, canLead } from './data.js';
+import { CANCEL_PREFIX, isTransferNote, model, palletFlow, palletBrief } from './flow.js';
 
+export { CANCEL_PREFIX };
 export const SCAN_TABLES = ['mo_routing', 'mo', 'mo_detail', 'product', 'bom_wood', 'pallet', 'pallet_log'];
 
-const CLOSED = ['da xong', 'da nhan', 'dong', 'da dong', 'closed', 'hoan thanh', 'huy'];
+// Pallet "đóng" = không nhận thêm sản lượng (kể cả đang chờ tổ sau nhận). "Trả lại" = mở lại tại tổ giao.
+const CLOSED = ['da xong', 'da nhan', 'cho nhan', 'dong', 'da dong', 'closed', 'hoan thanh', 'huy'];
 export const isClosed = (status) => CLOSED.includes(norm(status));
-export const CANCEL_PREFIX = 'HUỶ ';
 
 /** "LSX-02-1626-01-W004-TC" → { partRef, team }. Không có hậu tố tổ → team = ''. */
 export function parseCode(raw, t) {
@@ -174,8 +176,8 @@ export function buildContext(t, acc, raw) {
   const out = {
     code, partRef: head.part_ref, team: null, groups,
     product: productView, part: partView, cum: cumView, spChildren,
-    canWrite: false, hasNg: t.pallet_log.header.includes('qty_ng'),
-    teamSteps: [], pallets: [], logs: [], today: vnNow().iso,
+    canWrite: false, canLead: false, hasNg: t.pallet_log.header.includes('qty_ng'),
+    teamSteps: [], pallets: [], incoming: [], logs: [], today: vnNow().iso,
   };
   if (!team) return out;
   if (!groups.some((g) => g.code === team)) {
@@ -184,6 +186,7 @@ export function buildContext(t, acc, raw) {
 
   out.team = { code: team, name: teamName(team) };
   out.canWrite = canWrite(acc, team);
+  out.canLead = canLead(acc, team);
 
   const idx = (r) => steps.indexOf(r);
   const tSteps = steps.filter((s) => coder(s) === team);
@@ -205,6 +208,9 @@ export function buildContext(t, acc, raw) {
   const pallets = t.pallet.rows.filter((p) => ids.has(p.mo_route_id) || palletIds.has(p.pallet_id));
   const palletNo = new Map(pallets.map((p) => [p.pallet_id, p.pallet_no]));
 
+  const m = model(t);
+  const flow = palletFlow(t, m);
+  const flowById = new Map(flow.map((f) => [f.id, f]));
   out.pallets = pallets.map((p) => {
     const perStep = {};
     let qty = 0;
@@ -213,12 +219,23 @@ export function buildContext(t, acc, raw) {
       perStep[l.mo_route_id] = (perStep[l.mo_route_id] || 0) + num(l.qty);
       qty += num(l.qty);
     }
+    const f = flowById.get(p.pallet_id);
     return {
       id: p.pallet_id, no: p.pallet_no, lot_go: p.lot_go, lot_dau: p.lot_dau,
       status: p.status || '', closed: isClosed(p.status), note: p.note,
       created_by: p.created_by, created_at: p.created_at, perStep, qty,
+      state: f?.state || 'done', returned: !!f?.returned, qtyOut: f?.qtyOut || 0, exitStage: f?.exitStage || '',
+      dest: f?.dest || null, from: f?.from || '', qtyIn: f?.qtyIn || 0,
+      delivered_at: f?.delivered_at || '', received_at: f?.received_at || '',
+      canDeliver: !!f && out.canLead && f.state === 'open' && !!f.dest && f.qtyOut > 0,
+      canFinish: !!f && (out.canLead || out.canWrite) && f.state === 'open' && !f.dest,
     };
   }).sort((a, b) => Number(a.closed) - Number(b.closed) || (parseStamp(b.created_at) > parseStamp(a.created_at) ? 1 : -1));
+
+  // Pallet tổ trước đã giao, đang chờ tổ này nhận (chi tiết này, hoặc chi tiết con khi đây là cụm/SP)
+  out.incoming = flow
+    .filter((f) => f.state === 'waiting' && f.dest && ids.has(f.dest.stepId))
+    .map((f) => ({ ...palletBrief(f), canReceive: canLead(acc, f.dest.team) }));
 
   const cancelled = new Set(teamLogs
     .filter((l) => String(l.note).startsWith(CANCEL_PREFIX))
@@ -226,14 +243,15 @@ export function buildContext(t, acc, raw) {
   const today = vnNow().iso;
   out.logs = teamLogs.slice(-30).reverse().map((l) => {
     const reversal = String(l.note).startsWith(CANCEL_PREFIX);
+    const transfer = isTransferNote(l.note);
     const mine = String(l.created_by).toLowerCase() === acc.email;
     return {
       id: l.log_id, pallet_id: l.pallet_id, pallet_no: palletNo.get(l.pallet_id) || '',
       step: l.mo_route_id, stage: stageOf.get(l.mo_route_id) || '',
       date: l.work_date, qty: num(l.qty), ng: num(l.qty_ng), worker: l.worker, note: l.note,
       by: l.created_by, at: l.created_at,
-      reversal, cancelled: cancelled.has(l.log_id),
-      canCancel: out.canWrite && !reversal && !cancelled.has(l.log_id) && !!l.log_id
+      reversal, transfer, cancelled: cancelled.has(l.log_id),
+      canCancel: out.canWrite && !reversal && !transfer && !cancelled.has(l.log_id) && !!l.log_id
         && (acc.admin || (mine && parseDay(l.created_at) === today)),
     };
   });

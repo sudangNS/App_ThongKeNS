@@ -32,8 +32,12 @@ async function api(path, { method = 'GET', body } = {}) {
 
 /* ---------------- Màn hình ---------------- */
 
+const VIEWS = ['v-loading', 'v-login', 'v-scan', 'v-item', 'v-work', 'v-wip', 'v-report', 'v-more', 'v-transfer'];
+const TAB_OF = { 'v-scan': 'scan', 'v-item': 'scan', 'v-work': 'work', 'v-wip': 'wip', 'v-report': 'report', 'v-more': 'more', 'v-transfer': 'more' };
 function show(id) {
-  for (const v of ['v-loading', 'v-login', 'v-scan', 'v-item']) $(`#${v}`).hidden = v !== id;
+  if (id !== 'v-scan' && id !== 'v-item') stopCamera();
+  for (const v of VIEWS) $(`#${v}`).hidden = v !== id;
+  $$('#tabbar [data-tab]').forEach((b) => b.setAttribute('aria-current', String(b.dataset.tab === TAB_OF[id])));
   window.scrollTo(0, 0);
 }
 
@@ -74,7 +78,9 @@ function loadGis() {
 
 async function showLogin(msg = '') {
   stopCamera();
-  $('#who').hidden = true;
+  $('#tabbar').hidden = true;
+  $('#btn-bell').hidden = true;
+  document.body.classList.remove('has-tabs');
   show('v-login');
   $('#login-msg').textContent = msg;
   if (!state.clientId) { $('#login-msg').textContent = 'Máy chủ chưa cấu hình GOOGLE_CLIENT_ID'; return; }
@@ -95,26 +101,38 @@ async function onCredential(resp) {
   } catch (e) { $('#login-msg').textContent = e.message; }
 }
 
+const isLead = () => !!state.user?.leadTeams?.length;
+const canTransfer = () => !!state.user && !state.user.viewOnly && (state.user.admin || state.user.statTeams?.length > 0);
+
 function setUser(u) {
   state.user = u;
-  $('#who').hidden = !u;
-  if (u) $('#who-name').textContent = `${u.name}${u.role ? ` · ${u.role}` : ''}`;
+  $('#tabbar').hidden = !u;
+  $('#btn-bell').hidden = !u || !isLead();
+  document.body.classList.toggle('has-tabs', !!u);
+  if (u) refreshBadge();
 }
 
-$('#btn-logout').addEventListener('click', async () => {
+async function logout() {
   try { await api('/api/auth', { method: 'DELETE' }); } catch { /* bỏ qua */ }
   try { google.accounts.id.disableAutoSelect(); } catch { /* bỏ qua */ }
   setUser(null);
   history.replaceState(null, '', '/');
   showLogin();
-});
+}
 
 /* ---------------- Điều hướng ---------------- */
 
+const TABS = { scan: () => showScan(), work: () => showWork(), wip: () => showWip(), report: () => showReport(), more: () => showMore(), transfer: () => showTransfer() };
+
 function route() {
-  const code = new URLSearchParams(location.search).get('code');
-  if (code) openCode(code, false);
-  else showScan();
+  const q = new URLSearchParams(location.search);
+  const code = q.get('code');
+  if (code) return openCode(code, false);
+  (TABS[q.get('tab')] || TABS.scan)();
+}
+function goTab(tab, extra = '') {
+  history.pushState(null, '', tab === 'scan' ? '/' : `/?tab=${tab}${extra}`);
+  route();
 }
 window.addEventListener('popstate', () => { if (state.user) route(); });
 document.addEventListener('click', (e) => {
@@ -122,9 +140,25 @@ document.addEventListener('click', (e) => {
   if (!a) return;
   e.preventDefault();
   if (!state.user) return;
-  history.pushState(null, '', '/');
-  showScan();
+  goTab('scan');
 });
+$$('#tabbar [data-tab]').forEach((b) => b.addEventListener('click', () => goTab(b.dataset.tab)));
+$('#btn-bell').addEventListener('click', () => goTab('work'));
+
+/* ---------------- Chuông: số pallet chờ tôi nhận ---------------- */
+
+function setBadge(n) {
+  for (const el of [$('#bell-n'), $('#tab-work-n')]) {
+    el.hidden = !n;
+    el.textContent = n > 99 ? '99+' : String(n || '');
+  }
+}
+async function refreshBadge() {
+  if (!state.user || !isLead()) return setBadge(0);
+  try { setBadge((await api('/api/handover?count=1')).inbox); } catch { /* bỏ qua */ }
+}
+setInterval(() => { if (document.visibilityState === 'visible') refreshBadge(); }, 60_000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshBadge(); });
 
 function go(code, fromScan) {
   history.pushState(null, '', `/?code=${encodeURIComponent(code)}`);
@@ -345,9 +379,8 @@ function formCard(ctx) {
       <p class="muted small">Mã quét không có hậu tố tổ. Chọn tổ:</p>
       <div class="row gap wrap">${ctx.groups.map((g) => `<button class="btn" data-go="${esc(ctx.partRef)}-${esc(g.code)}">${esc(g.name)}</button>`).join('')}</div></div>`;
   }
-  if (!ctx.canWrite) {
-    return `<div class="card"><div class="notice">Bạn chỉ được xem. Quyền nhập sản lượng ${esc(ctx.team.name)} do quản lý cấp trong tab <b>To</b> (manager_email / thong_ke_emails).</div></div>`;
-  }
+  // Tổ trưởng / người xem: chỉ hiện thông tin, không có khung nhập
+  if (!ctx.canWrite) return '';
   const sel = state.pallet || defaultPallet(ctx);
   state.pallet = sel;
   const open = ctx.pallets.filter((p) => !p.closed);
@@ -405,6 +438,11 @@ function formCard(ctx) {
   </div>`;
 }
 
+const statusBadge = (status, state) => {
+  const cls = state === 'waiting' ? ' warn' : state === 'open' ? '' : ' off';
+  return `<span class="badge${cls}">${esc(status || 'Đang làm')}</span>`;
+};
+
 function palletCard(ctx) {
   if (!ctx.team || !ctx.pallets.length) return '';
   const stage = new Map(ctx.teamSteps.map((s) => [s.id, s.stage]));
@@ -412,14 +450,28 @@ function palletCard(ctx) {
     ${ctx.pallets.map((p) => `<li>
       <div class="row gap">
         <b class="grow">Pallet ${esc(p.no)}</b>
-        <span class="badge${p.closed ? ' off' : ''}">${esc(p.status || 'Đang làm')}</span>
+        ${statusBadge(p.status, p.state)}
       </div>
       <div class="small muted">${Object.entries(p.perStep).map(([id, q]) => `${esc(stage.get(id) || id)}: ${fmt(q)}`).join(' · ') || 'Chưa ghi sản lượng'}</div>
+      ${p.qtyIn ? `<div class="small muted">Nhận từ tổ trước: ${fmt(p.qtyIn)}</div>` : ''}
+      ${p.dest ? `<div class="small">Giao tới: <b>${esc(p.dest.teamName)}</b> · ${esc(p.dest.stage)}${p.dest.kind === 'parent' ? ` (${esc(p.dest.partName)})` : ''} · SL giao ${fmt(p.qtyOut)}</div>` : ''}
+      ${p.state === 'waiting' ? `<div class="small muted">Đã giao ${esc(p.delivered_at)}, chờ ${esc(p.dest?.teamName || 'tổ sau')} nhận</div>` : ''}
+      ${p.returned ? `<div class="notice small" style="margin-top:6px">${esc(p.note)}</div>` : ''}
       <div class="small muted">${p.lot_go ? `Lô gỗ ${esc(p.lot_go)} · ` : ''}${p.lot_dau ? `Lô dầu ${esc(p.lot_dau)} · ` : ''}Tạo ${esc(p.created_at)}</div>
-      ${ctx.canWrite && !p.closed ? `<button class="btn sm" data-close="${esc(p.id)}" style="margin-top:6px">Đóng pallet (đã xong tại tổ)</button>` : ''}
-      ${ctx.canWrite && p.closed && state.user?.admin ? `<button class="btn sm" data-reopen="${esc(p.id)}" style="margin-top:6px">Mở lại</button>` : ''}
+      <div class="row gap wrap" style="margin-top:6px">
+        ${p.canDeliver ? `<button class="btn sm primary" data-deliver="${esc(p.id)}" data-q="${p.qtyOut}" data-to="${esc(p.dest.teamName)}">Giao ${fmt(p.qtyOut)} cho ${esc(p.dest.teamName)}</button>` : ''}
+        ${ctx.canLead && p.state === 'open' && p.dest && !p.qtyOut ? `<span class="small muted">Chưa có SL ở “${esc(p.exitStage)}” để giao</span>` : ''}
+        ${p.canFinish ? `<button class="btn sm" data-close="${esc(p.id)}">Hoàn thành pallet</button>` : ''}
+        ${p.closed && state.user?.admin ? `<button class="btn sm" data-reopen="${esc(p.id)}">Mở lại</button>` : ''}
+      </div>
     </li>`).join('')}
   </ul></div>`;
+}
+
+function incomingCard(ctx) {
+  if (!ctx.incoming?.length) return '';
+  return `<div class="card attn"><h2>Chờ ${esc(ctx.team.name)} nhận (${ctx.incoming.length})</h2>
+    <ul class="list">${ctx.incoming.map((f) => palletItem(f, { receive: f.canReceive })).join('')}</ul></div>`;
 }
 
 function logCard(ctx) {
@@ -438,9 +490,13 @@ function logCard(ctx) {
 function renderItem() {
   const ctx = state.ctx;
   const v = $('#v-item');
-  v.innerHTML = backBar(ctx) + formCard(ctx) + infoCard(ctx) + palletCard(ctx) + logCard(ctx);
+  const transfer = canTransfer() && (ctx.part.level || '').toUpperCase() === 'CT'
+    ? `<div class="card"><button class="btn" data-transfer="${esc(ctx.partRef)}">Chuyển chi tiết này sang LSX khác…</button></div>` : '';
+  v.innerHTML = backBar(ctx) + incomingCard(ctx) + formCard(ctx) + infoCard(ctx) + palletCard(ctx) + logCard(ctx) + transfer;
   bindCommon(v);
   bindForm(v, ctx);
+  bindHandover(v, () => openCode(ctx.code, false));
+  $('[data-transfer]', v)?.addEventListener('click', (e) => goTab('transfer', `&ref=${encodeURIComponent(e.currentTarget.dataset.transfer)}`));
 }
 
 function bindForm(v, ctx) {
@@ -537,10 +593,10 @@ async function save(v, ctx, confirm) {
 async function palletAction(id, action) {
   const p = state.ctx.pallets.find((x) => x.id === id);
   const ok = await ask(
-    action === 'close' ? 'Đóng pallet?' : 'Mở lại pallet?',
+    action === 'close' ? 'Hoàn thành pallet?' : 'Mở lại pallet?',
     action === 'close'
-      ? `<p>Pallet <b>${esc(p?.no)}</b> sẽ không nhận thêm sản lượng tại tổ này.</p>`
-      : `<p>Pallet <b>${esc(p?.no)}</b> sẽ nhận sản lượng trở lại.</p>`,
+      ? `<p>Pallet <b>${esc(p?.no)}</b> đã xong công đoạn cuối, sẽ ra khỏi chuyền.</p>`
+      : `<p>Pallet <b>${esc(p?.no)}</b> trở về trạng thái Đang làm tại tổ này.</p>`,
   );
   if (!ok) return;
   try {
@@ -548,7 +604,7 @@ async function palletAction(id, action) {
     state.ctx = r.context;
     state.pallet = null;
     renderItem();
-    toast(action === 'close' ? 'Đã đóng pallet' : 'Đã mở lại pallet');
+    toast(action === 'close' ? 'Đã hoàn thành pallet' : 'Đã mở lại pallet');
   } catch (e) { if (e.status !== 401) toast(e.message, true); }
 }
 

@@ -15,6 +15,7 @@ before(async () => {
     scan: (await import('../api/scan.js')).default,
     output: (await import('../api/output.js')).default,
     pallet: (await import('../api/pallet.js')).default,
+    handover: (await import('../api/handover.js')).default,
   };
 });
 
@@ -165,10 +166,14 @@ test('huỷ dòng: ghi dòng âm, không huỷ 2 lần; đóng pallet chặn nh�
   assert.equal(again.status, 400);
 
   const pid = c.json.context.pallets[0].id;
+  // Pallet còn tổ sau → không "đóng" được, phải để tổ trưởng Giao
   const cl = await call('pallet', { method: 'POST', cookie, body: { code: `${W2}-SC`, pallet_id: pid, action: 'close' } });
-  assert.equal(cl.status, 200, JSON.stringify(cl.json));
-  assert.equal(SHEETS.Pallet[1][5], 'Đã xong');
-  assert.equal(SHEETS.Pallet[1][12], 'tk.sc@ns.vn');
+  assert.equal(cl.status, 400);
+  const admin = await login('admin@ns.vn');
+  const d = await call('handover', { method: 'POST', cookie: admin, body: { action: 'deliver', pallet_id: pid } });
+  assert.equal(d.status, 200, JSON.stringify(d.json));
+  assert.equal(SHEETS.Pallet[1][5], 'Chờ nhận');
+  assert.equal(SHEETS.Pallet[1][12], 'admin@ns.vn');
   const add = await call('output', { method: 'POST', cookie, body: { action: 'add', code: `${W2}-SC`, pallet_id: pid, entries: [{ id: `${W2}-S01`, qty: 1 }] } });
   assert.equal(add.status, 400);
   const re = await call('pallet', { method: 'POST', cookie, body: { code: `${W2}-SC`, pallet_id: pid, action: 'reopen' } });

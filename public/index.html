@@ -16,10 +16,12 @@
 <body>
   <header class="top">
     <a class="brand" href="/" data-nav="home">Thống kê NS</a>
-    <button id="btn-install" class="btn sm" type="button" hidden>Cài app</button>
-    <div id="who" class="who" hidden>
-      <span id="who-name"></span>
-      <button id="btn-logout" class="link" type="button">Đăng xuất</button>
+    <div class="row gap">
+      <button id="btn-install" class="btn sm" type="button" hidden>Cài app</button>
+      <button id="btn-bell" class="bell" type="button" aria-label="Pallet chờ nhận" hidden>
+        <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2Z"/></svg>
+        <span id="bell-n" class="bell-n" hidden></span>
+      </button>
     </div>
   </header>
 
@@ -43,7 +45,7 @@
         </div>
         <p id="cam-msg" class="msg" role="alert"></p>
         <form id="f-manual" class="row gap" autocomplete="off">
-          <input id="in-code" class="grow" placeholder="Hoặc nhập / dùng máy quét: LSX-…-W004-TC" aria-label="Mã QR">
+          <input id="in-code" class="grow" placeholder="Hoặc nhập / máy quét: LSX-…-W004-T-TC" aria-label="Mã QR">
           <button class="btn" type="submit">Mở</button>
         </form>
       </div>
@@ -51,7 +53,20 @@
     </section>
 
     <section id="v-item" hidden></section>
+    <section id="v-work" hidden></section>
+    <section id="v-wip" hidden></section>
+    <section id="v-report" hidden></section>
+    <section id="v-more" hidden></section>
+    <section id="v-transfer" hidden></section>
   </main>
+
+  <nav id="tabbar" class="tabbar" aria-label="Chức năng" hidden>
+    <button type="button" data-tab="scan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9V5a2 2 0 0 1 2-2h4M15 3h4a2 2 0 0 1 2 2v4M21 15v4a2 2 0 0 1-2 2h-4M9 21H5a2 2 0 0 1-2-2v-4M7 12h10"/></svg><span>Quét</span></button>
+    <button type="button" data-tab="work"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg><span>Việc</span><i id="tab-work-n" class="tab-n" hidden></i></button>
+    <button type="button" data-tab="wip"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v10H3zM7 7v10M12 7v10M17 7v10"/></svg><span>Trên chuyền</span></button>
+    <button type="button" data-tab="report"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Sản lượng</span></button>
+    <button type="button" data-tab="more"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg><span>Thêm</span></button>
+  </nav>
 
   <dialog id="dlg">
     <form method="dialog">
@@ -67,5 +82,6 @@
 
   <script src="/vendor/html5-qrcode.min.js" defer></script>
   <script src="/app.js" defer></script>
+  <script src="/views.js" defer></script>
 </body>
 </html>

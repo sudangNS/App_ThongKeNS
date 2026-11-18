@@ -29,7 +29,8 @@ App cũng nhận dạng ngắn `LSX-02-1626-03-W003-TC` và mã công đoạn `m
 |---|---|---|
 | MO Routing, MO, MO Detail, Product, BOM Wood, Works List | ✔ | – |
 | Users, To | ✔ (phân quyền) | – |
-| Pallet | ✔ | Thêm pallet mới; đóng pallet → `status`, `closed_at`, `closed_by` |
+| Pallet | ✔ | Thêm pallet mới; giao → `status = Chờ nhận`, `closed_at`, `closed_by`; nhận → `Đã nhận`, `received_at`, `received_by` + pallet mới tại tổ nhận (`from_pallet_id`, `qty_in`); trả lại → `Trả lại` + lý do trong `note` |
+| Transfer | ✔ | 1 dòng mỗi lần chuyển LSX: `transfer_id, from_part_ref, to_part_ref, bom_line_id, up_to_step, qty, reason, created_by, created_at` |
 | Pallet Log | ✔ | 1 dòng / công đoạn / lần lưu: `log_id, pallet_id, mo_route_id, work_date (dd/mm/yyyy), worker, qty, [qty_ng], note, created_by, created_at` |
 | Scan | – | 1 dòng mỗi lần quét: `scan_id, mo_route_id, scanned_by, scanned_at` |
 
@@ -41,14 +42,29 @@ App cũng nhận dạng ngắn `LSX-02-1626-03-W003-TC` và mã công đoạn `m
 ## Phân quyền
 
 1. **Đăng nhập Google**: email phải có trong tab **Users** với `active = TRUE`. Nếu đặt `ALLOWED_DOMAIN` thì chỉ nhận email thuộc tên miền đó.
-2. **Quyền nhập theo tổ**:
-   - `role` bắt đầu bằng *Admin, Quản trị, Kỹ thuật, Quản đốc, Quản lý, Giám đốc*: nhập được mọi tổ, mở lại pallet đã đóng, huỷ dòng của người khác.
-   - Các vai trò khác: chỉ nhập cho tổ có email của mình trong tab **To**, ở cột `manager_email` hoặc `thong_ke_emails` (nhiều email cách nhau bằng dấu phẩy). Có thể thêm cột tuỳ chọn `teams` vào Users, ví dụ `SC, TC`.
+2. **Quyền theo tổ** (tab **To**, nhiều email cách nhau dấu phẩy):
+   - **Thống kê** = `thong_ke_emails` (hoặc cột tuỳ chọn `Users.teams`, VD `SC, TC`): nhập sản lượng, chuyển LSX.
+   - **Tổ trưởng** = `manager_email` (`Users.role = Tổ trưởng`): quét chỉ xem thông tin (không có khung nhập), **Giao** pallet của tổ mình, **Nhận / Trả lại** pallet giao tới tổ mình.
+   - `role` bắt đầu bằng *Admin, Quản trị, Kỹ thuật, Quản đốc, Quản lý, Giám đốc*: mọi quyền ở mọi tổ (giao/nhận thay khi tổ trưởng vắng, mở lại pallet, huỷ dòng của người khác).
    - `role = Xem`: chỉ xem.
 3. Khoá người dùng bằng cách đặt `active = FALSE`, có tác dụng sau tối đa khoảng 1 phút.
 4. Người nhập được tự huỷ dòng của mình **trong ngày**. Quá ngày thì quản lý huỷ.
 5. Ngày làm không được ở tương lai. Người không phải quản lý chỉ được nhập lùi tối đa `MAX_BACKDATE_DAYS` ngày (mặc định 7).
 
+## Giao nhận, Trên chuyền, Sản lượng, Chuyển LSX
+
+Tab dưới đáy: **Quét · Việc · Trên chuyền · Sản lượng · Thêm**. Sáng/tối theo cài đặt điện thoại.
+
+- **Vòng đời pallet**: thống kê tổ A nhập SL (*Đang làm*) → tổ trưởng A **Giao** (*Chờ nhận*, khoá nhập) →
+  tổ trưởng tổ sau **Nhận đủ** (*Đã nhận*, tạo pallet cùng số tại tổ sau) hoặc **Trả lại** + lý do (*Trả lại*, về tổ A sửa rồi giao lại).
+  Không sửa SL khi nhận. Giao tới = tổ của công đoạn kế; chi tiết xong tổ cuối → tổ của bước đầu cụm/SP cha (thường Lắp ráp, không tạo pallet mới).
+  SL giao = SL của pallet ở bước cuối của tổ. SP xong đóng gói → **Hoàn thành pallet**.
+- **Chuông**: số pallet đang chờ tổ mình nhận (cập nhật mỗi 60 giây khi app mở). Bấm → tab Việc.
+- **Trên chuyền**: pallet Đang làm / Trả lại / Chờ nhận theo tổ → công đoạn; lọc tổ; tổng pallet, m³ gỗ, số chi tiết/cụm/SP; cảnh báo ≥ 3 ngày. Pallet chờ nhận vẫn tính ở tổ giao.
+- **Sản lượng** ngày/tuần/tháng: cùng quy tắc với app Thong_Ke_NSCN – công đoạn bỏ qua suy ra từ công đoạn sau, cụm/SP đã vào ráp thì chi tiết con tính đã xong;
+  SL tổ = SL ở bước cuối của tổ trên từng chi tiết; m³ tinh theo `BOM Wood.m3_finish`; toàn nhà máy = SP xong đóng gói; so với kỳ trước.
+- **Chuyển LSX** (thống kê/quản lý): chỉ chi tiết, chỉ giữa 2 LSX cùng `bom_line_id`, SL ≤ số đã ghi ở mọi công đoạn chuyển.
+  Ghi tab Transfer + cặp dòng Pallet Log −SL / +SL (`note = "CHUYỂN <id> …"`), không tính vào sản lượng ngày, không huỷ được – hoàn tác bằng chuyển ngược lại.
 ## Triển khai (làm theo đúng thứ tự)
 
 Vì sao phải theo thứ tự này: OAuth Client ID (bước 3) cần biết địa chỉ app, mà địa chỉ app chỉ có sau khi tạo project trên Vercel (bước 2).

@@ -15,6 +15,7 @@ export const TABLES = {
   pallet:     { sheet: 'Pallet', ttl: 10 },
   pallet_log: { sheet: 'Pallet Log', ttl: 10 },
   scan:       { sheet: 'Scan', ttl: 3600 }, // chỉ cần header để ghi
+  transfer:   { sheet: 'Transfer', ttl: 10 }, // nhật ký chuyển chi tiết giữa LSX
 };
 
 const cache = new Map();    // name -> { table, at }
@@ -103,22 +104,34 @@ export function accessOf(email, t) {
   const rn = norm(u.role);
   const admin = ADMIN_ROLES.some((a) => rn === a || rn.startsWith(`${a} `));
   const viewOnly = VIEW_ROLES.includes(rn);
-  const teams = new Set();
-  if (admin) teamList(t).forEach((x) => teams.add(x.code));
+  const all = teamList(t).map((x) => x.code);
+  // Thống kê (nhập sản lượng): To.thong_ke_emails + cột tuỳ chọn Users.teams (VD "SC, TC" hoặc "T-SC")
+  const statTeams = new Set();
+  // Tổ trưởng (giao / nhận pallet): To.manager_email
+  const leadTeams = new Set();
   for (const r of t.to.rows) {
-    const emails = [...splitEmails(r.manager_email), ...splitEmails(r.thong_ke_emails)];
-    if (emails.includes(email)) teams.add(teamIdToCode(r.team_id));
+    const code = teamIdToCode(r.team_id);
+    if (splitEmails(r.thong_ke_emails).includes(email)) statTeams.add(code);
+    if (splitEmails(r.manager_email).includes(email)) leadTeams.add(code);
   }
-  // Cột tuỳ chọn "teams" trong Users: VD "SC, TC" hoặc "T-SC"
-  String(u.teams || '').split(/[\s,;]+/).filter(Boolean).forEach((c) => teams.add(teamIdToCode(c)));
+  String(u.teams || '').split(/[\s,;]+/).filter(Boolean).forEach((c) => statTeams.add(teamIdToCode(c)));
+  if (admin) all.forEach((c) => { statTeams.add(c); leadTeams.add(c); });
+  if (viewOnly) { statTeams.clear(); leadTeams.clear(); }
   return {
     email,
     name: u.full_name || email,
     role: u.role || '',
     admin,
     viewOnly,
-    teams: [...teams],
+    statTeams: [...statTeams],
+    leadTeams: [...leadTeams],
+    teams: [...new Set([...statTeams, ...leadTeams])],
   };
 }
 
-export const canWrite = (acc, team) => !!acc && !acc.viewOnly && (acc.admin || acc.teams.includes(team));
+/** Nhập sản lượng: thống kê của tổ (hoặc quản lý). Tổ trưởng chỉ xem + giao/nhận. */
+export const canWrite = (acc, team) => !!acc && !acc.viewOnly && (acc.admin || acc.statTeams.includes(team));
+/** Giao / nhận pallet: tổ trưởng của tổ (hoặc quản lý). */
+export const canLead = (acc, team) => !!acc && !acc.viewOnly && (acc.admin || acc.leadTeams.includes(team));
+/** Chuyển chi tiết giữa LSX: thống kê (bất kỳ tổ) hoặc quản lý. */
+export const canTransfer = (acc) => !!acc && !acc.viewOnly && (acc.admin || acc.statTeams.length > 0);
