@@ -60,7 +60,9 @@ Tab dưới đáy: **Quét · Việc · Trên chuyền · Sản lượng · Thê
   Không sửa SL khi nhận. Giao tới = tổ của công đoạn kế; chi tiết xong tổ cuối → tổ của bước đầu cụm/SP cha (thường Lắp ráp, không tạo pallet mới).
   SL giao = SL của pallet ở bước cuối của tổ. SP xong đóng gói → **Hoàn thành pallet**.
 - **Chuông**: số pallet đang chờ tổ mình nhận (cập nhật mỗi 60 giây khi app mở). Bấm → tab Việc.
-- **Trên chuyền**: pallet Đang làm / Trả lại / Chờ nhận theo tổ → công đoạn; lọc tổ; tổng pallet, m³ gỗ, số chi tiết/cụm/SP; cảnh báo ≥ 3 ngày. Pallet chờ nhận vẫn tính ở tổ giao.
+- **Trên chuyền** (tính theo SL như app Thong_Ke_NSCN, không phụ thuộc trạng thái pallet): tồn = SL công đoạn trước đã xong − SL công đoạn sau đã làm.
+  Khác tổ → *Chờ làm* ở đầu vào tổ sau (gồm hàng đã nhận nhưng tổ sau chưa khai báo); cùng tổ → *đang làm dở*; xong bước cuối chi tiết/cụm → *Chờ ráp* ở tổ ráp.
+  Phần trên pallet chưa giao / đã giao chưa nhận vẫn tính ở tổ giao. Lọc tổ; tổng m³ gỗ, chi tiết/cụm/SP; tuổi tồn FIFO, cảnh báo ≥ 3 ngày.
 - **Sản lượng** ngày/tuần/tháng: cùng quy tắc với app Thong_Ke_NSCN – công đoạn bỏ qua suy ra từ công đoạn sau, cụm/SP đã vào ráp thì chi tiết con tính đã xong;
   SL tổ = SL ở bước cuối của tổ trên từng chi tiết; m³ tinh theo `BOM Wood.m3_finish`; toàn nhà máy = SP xong đóng gói; so với kỳ trước.
 - **Chuyển LSX** (thống kê/quản lý): chỉ chi tiết, chỉ giữa 2 LSX cùng `bom_line_id`, SL ≤ số đã ghi ở mọi công đoạn chuyển.

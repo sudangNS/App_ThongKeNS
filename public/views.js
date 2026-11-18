@@ -92,14 +92,25 @@ async function showWork(data) {
 
 const wipState = { team: store.get('wipTeam', ''), data: null };
 
-function tiles(sum) {
+const fmtQ = (n) => fmt(Math.round(Number(n) || 0));
+
+function tiles(sum, pallets) {
   return `<div class="tiles">
-    <div class="tile"><b>${fmt3(sum.m3)}</b><span>m³ gỗ</span></div>
-    <div class="tile"><b>${fmt(sum.pallets)}</b><span>pallet</span></div>
-    <div class="tile"><b>${fmt(sum.ct)}</b><span>chi tiết</span></div>
-    <div class="tile"><b>${fmt(sum.cum)}</b><span>cụm</span></div>
-    <div class="tile"><b>${fmt(sum.sp)}</b><span>SP</span></div>
+    <div class="tile"><b>${fmt3(sum.m3)}</b><span>m³ gỗ tồn</span></div>
+    <div class="tile"><b>${fmtQ(sum.ct)}</b><span>chi tiết</span></div>
+    <div class="tile"><b>${fmtQ(sum.cum)}</b><span>cụm</span></div>
+    <div class="tile"><b>${fmtQ(sum.sp)}</b><span>SP</span></div>
+    <div class="tile"><b>${fmt(pallets)}</b><span>pallet mở</span></div>
   </div>`;
+}
+
+function wipItem(x) {
+  const age = x.ageDays >= 3 ? `<span class="badge warn">${x.ageDays} ngày</span>` : x.ageDays ? `<span class="small muted">${x.ageDays} ngày</span>` : '';
+  return `<li><button class="item" data-open="${esc(x.code)}">
+    <div class="row gap"><b class="grow">${esc(x.partName)}</b>${age}</div>
+    <div class="small muted">${esc(x.moNo)}${x.lsxStt ? ` · dòng ${esc(x.lsxStt)}` : ''} · ${esc(x.product)}</div>
+    <div class="small"><b>${fmtQ(x.qty)}</b> ${levelName[x.level] || ''} · ${fmt3(x.m3)} m³</div>
+  </button></li>`;
 }
 
 async function showWip(reload) {
@@ -112,21 +123,26 @@ async function showWip(reload) {
   const d = wipState.data;
   const teams = d.teams.filter((x) => !wipState.team || x.code === wipState.team);
   const sum = wipState.team ? (teams[0]?.sum || d.total) : d.total;
+  const pallets = d.pallets.filter((f) => !wipState.team || f.team === wipState.team);
   v.innerHTML = `<div class="row gap"><h1 class="page-title grow">Trên chuyền</h1><button class="btn sm" id="wip-reload">Tải lại</button></div>
     <div class="chips" role="group" aria-label="Lọc tổ">
       <button class="fchip" data-team="" aria-pressed="${!wipState.team}">Tất cả</button>
-      ${d.teams.map((x) => `<button class="fchip" data-team="${esc(x.code)}" aria-pressed="${wipState.team === x.code}">${esc(x.name.replace(/^Tổ /, ''))} <small>${x.sum.pallets}</small></button>`).join('')}
+      ${d.teams.map((x) => `<button class="fchip" data-team="${esc(x.code)}" aria-pressed="${wipState.team === x.code}">${esc(x.name.replace(/^Tổ /, ''))} <small>${fmt3(x.sum.m3)}</small></button>`).join('')}
     </div>
-    ${tiles(sum)}
-    ${sum.old ? `<p class="notice small">${sum.old} pallet nằm ≥ ${d.ageWarn} ngày</p>` : ''}
-    ${teams.filter((x) => x.sum.pallets).map((x) => `<div class="card">
-      <h2>${esc(x.name)} <span class="small muted">· ${fmt(x.sum.pallets)} pallet · ${fmt3(x.sum.m3)} m³</span></h2>
-      ${x.stages.map((s) => `<details${s.waiting ? ' class="waiting"' : ''}>
+    ${tiles(sum, pallets.length)}
+    ${sum.old ? `<p class="notice small">${fmt(sum.old)} dòng hàng tồn ≥ ${d.ageWarn} ngày</p>` : ''}
+    ${teams.filter((x) => x.sum.lines).map((x) => `<div class="card">
+      <h2>${esc(x.name)} <span class="small muted">· ${fmt3(x.sum.m3)} m³ · ${fmtQ(x.sum.ct)} CT · ${fmtQ(x.sum.cum)} cụm · ${fmtQ(x.sum.sp)} SP</span></h2>
+      ${x.stages.map((s) => `<details${s.kind === 'wait' ? ' class="waiting"' : ''}>
         <summary><span class="grow">${esc(s.stage)}</span>
-          <span class="small">${fmt(s.sum.pallets)} pallet · ${fmt(s.sum.ct + s.sum.cum + s.sum.sp)} · ${fmt3(s.sum.m3)} m³</span></summary>
-        <ul class="list">${s.pallets.map((f) => palletItem(f)).join('')}</ul>
+          <span class="small">${fmtQ(s.sum.ct + s.sum.cum + s.sum.sp)} · ${fmt3(s.sum.m3)} m³</span></summary>
+        <ul class="list">${s.items.map(wipItem).join('')}</ul>
+        ${s.more ? `<p class="small muted">… và ${fmt(s.more)} dòng khác (đã hiện ${s.items.length} dòng tồn lâu nhất)</p>` : ''}
       </details>`).join('')}
-    </div>`).join('') || '<div class="card"><p class="muted">Không có pallet nào đang trên chuyền.</p></div>'}`;
+    </div>`).join('') || '<div class="card"><p class="muted">Không có hàng tồn trên chuyền.</p></div>'}
+    ${pallets.length ? `<div class="card"><h2>Pallet đang mở / chờ nhận <span class="badge">${pallets.length}</span></h2>
+      <ul class="list">${pallets.map((f) => palletItem(f)).join('')}</ul></div>` : ''}
+    <p class="small muted">Tồn = số công đoạn trước đã xong − số công đoạn sau đã làm (giống báo cáo Thống kê NSCN). Hàng đã nhận nhưng tổ sau chưa khai báo nằm ở “Chờ làm” của tổ sau; hàng đã giao chưa bấm nhận vẫn ở tổ giao.</p>`;
   $$('[data-team]', v).forEach((b) => b.addEventListener('click', () => { wipState.team = b.dataset.team; store.set('wipTeam', wipState.team); showWip(); }));
   $('#wip-reload', v).addEventListener('click', () => showWip(true));
   bindHandover(v);

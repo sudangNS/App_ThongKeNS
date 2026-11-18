@@ -223,8 +223,18 @@ export function production(t, m = model(t)) {
   for (const p of parts) if (!p.parent) recompute(p, 0, null, true);
   const eff = new Map();
   for (const p of parts) p.steps.forEach((s, i) => eff.set(s.id, p.E[i]));
+  // Dòng thời gian phần tăng theo từng bước (để tính tuổi tồn FIFO)
+  const tl = new Map();
+  for (const day of [...daily.keys()].sort()) {
+    for (const [id, e] of daily.get(day)) {
+      if (!e) continue;
+      let a = tl.get(id);
+      if (!a) tl.set(id, (a = []));
+      a.push([day, e]);
+    }
+  }
 
-  const v = { daily, eff };
+  const v = { daily, eff, tl };
   prodCache = { m, log: t.pallet_log, v };
   return v;
 }

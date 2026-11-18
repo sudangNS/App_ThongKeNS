@@ -153,15 +153,20 @@ test('chi tiết xong tổ cuối → giao cho tổ ráp cụm (không tạo pal
   assert.equal(SHEETS.Pallet.length, n);
 });
 
-test('trên chuyền: tổng pallet, SL chi tiết, m³ theo tổ', async () => {
+test('trên chuyền: tồn theo SL – đã nhận chưa khai báo nằm ở đầu vào tổ sau; chưa giao vẫn ở tổ giao', async () => {
   const r = await call('wip', { cookie: await as('admin@ns.vn') });
-  assert.equal(r.status, 200);
-  const sc = r.json.teams.find((x) => x.code === 'SC');
-  // P2 (trả lại, 20 cái) đang ở SC
-  assert.equal(sc.sum.pallets, 1);
-  assert.equal(sc.sum.ct, 20);
-  assert.ok(Math.abs(sc.sum.m3 - 20 * 0.0012) < 1e-9);
-  assert.equal(r.json.total.pallets, 1);
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  const team = (c) => r.json.teams.find((x) => x.code === c);
+  const stage = (c, re) => team(c).stages.find((s) => re.test(s.stage));
+  // SC: Rong xong 120, TC mới Bào 4 mặt 50 → gap 70 = 20 (P2 bị trả lại, chưa giao, ở SC) + 50 (P1 đã nhận, chờ làm ở TC)
+  assert.equal(team('SC').sum.ct, 20);
+  assert.ok(stage('SC', /chờ giao cho Tổ Tinh chế/));
+  assert.ok(Math.abs(team('SC').sum.m3 - 20 * 0.0012) < 1e-9);
+  assert.equal(stage('TC', /^Chờ làm · Bào 4 mặt/).sum.ct, 50);
+  // TC xong Cắt tinh 50 (bước cuối chi tiết), đã giao + LR đã nhận, cụm chưa ráp → chờ ráp ở LR
+  assert.equal(stage('LR', /^Chờ ráp/).sum.ct, 50);
+  assert.equal(r.json.total.ct, 120);
+  assert.equal(r.json.pallets.filter((f) => f.team === 'SC').length, 1);
 });
 
 test('sản lượng: tổ tính ở bước ra tổ, suy diễn công đoạn bị bỏ qua', async () => {
