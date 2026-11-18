@@ -162,9 +162,9 @@ test('trên chuyền: tồn theo SL – đã nhận chưa khai báo nằm ở đ
   assert.equal(team('SC').sum.ct, 20);
   assert.ok(stage('SC', /chờ giao cho Tổ Tinh chế/));
   assert.ok(Math.abs(team('SC').sum.m3 - 20 * 0.0012) < 1e-9);
-  assert.equal(stage('TC', /^Chờ làm · Bào 4 mặt/).sum.ct, 50);
+  assert.equal(stage('TC', /^Đầu vào chờ Bào 4 mặt \(đã nhận từ Tổ Sơ chế\)/).sum.ct, 50);
   // TC xong Cắt tinh 50 (bước cuối chi tiết), đã giao + LR đã nhận, cụm chưa ráp → chờ ráp ở LR
-  assert.equal(stage('LR', /^Chờ ráp/).sum.ct, 50);
+  assert.equal(stage('LR', /^Đầu vào chờ ráp/).sum.ct, 50);
   assert.equal(r.json.total.ct, 120);
   assert.equal(r.json.pallets.filter((f) => f.team === 'SC').length, 1);
 });

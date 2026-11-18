@@ -92,7 +92,7 @@ export default handler({
             qty -= u;
           }
         }
-        const key = kind === 'do' ? `Chờ ${to.stage} (đang làm dở)` : kind === 'rap' ? `Chờ ráp · ${to.stage}` : `Chờ làm · ${to.stage}`;
+        const key = kind === 'do' ? `Đang làm dở · chờ ${to.stage}` : kind === 'rap' ? `Đầu vào chờ ráp · ${to.stage} (đã nhận từ ${m.teamName(s.team)})` : `Đầu vào chờ ${to.stage} (đã nhận từ ${m.teamName(s.team)})`;
         put(to.team, key, kind === 'do' ? 100 + to.idx : kind === 'rap' ? 500 : to.idx, kind, p, qty, since);
       }
     }
