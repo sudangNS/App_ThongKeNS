@@ -13,6 +13,19 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* bỏ qua */ } },
 };
 
+/* ---------------- Giao diện sáng / tối ---------------- */
+const THEMES = [['auto', 'Theo máy'], ['light', 'Sáng'], ['dark', 'Tối']];
+const darkMq = window.matchMedia('(prefers-color-scheme: dark)');
+function applyTheme(t = store.get('theme', 'auto')) {
+  const root = document.documentElement;
+  if (t === 'light' || t === 'dark') root.dataset.theme = t; else delete root.dataset.theme;
+  const dark = t === 'dark' || (t !== 'light' && darkMq.matches);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#18201c' : '#0f5132');
+}
+function setTheme(t) { store.set('theme', t); applyTheme(t); }
+darkMq.addEventListener?.('change', () => applyTheme());
+applyTheme();
+
 const state = { user: null, clientId: '', ctx: null, scanner: null, busy: false, pallet: null };
 
 /* ---------------- API ---------------- */
@@ -337,163 +350,129 @@ function childTree(label, items, level) {
   return `<details class="tree"><summary class="tree-head lv-${k}"><span class="grow">${label}</span><span class="badge">${items.length}</span></summary>${progressList(items)}</details>`;
 }
 
-/** 3 khối tách riêng theo cấp cha → con: Sản phẩm → Cụm → Chi tiết. */
-function infoCard(ctx) {
-  const { part, cum, product } = ctx;
-  const teamCode = ctx.team?.code;
+/* ================= Màn hình chi tiết sau khi quét =================
+   Thứ tự: Tổng quan chi tiết → Cụm (thu gọn) → Sản phẩm (thu gọn) → Chờ nhận → Pallet đang làm → Pallet đã giao
+           → nút Nhập sản lượng (pop-up 3 bước: chọn pallet → nhập song song → xác nhận) → Nhật ký. */
+
+const LV_NAME = { SP: 'Sản phẩm', CUM: 'Cụm', CT: 'Chi tiết' };
+
+function fact(label, value) {
+  return value === '' || value === null || value === undefined ? '' : `<div class="fact"><span>${label}</span><b>${value}</b></div>`;
+}
+
+function summaryCard(ctx) {
+  const { part, cum, product, stats } = ctx;
   const lvl = (part.level || '').toUpperCase();
-  const isCum = lvl === 'CUM';
+  const [k] = lvOf(lvl);
+  const teamCode = ctx.team?.code;
   const isSP = lvl === 'SP';
-  const route = (steps, mine) => `<div class="route">${steps.map((s) => stepChip(s, mine && s.team === teamCode)).join('')}</div>`;
+  const isCum = lvl === 'CUM';
+  const mat = part.material ? `${esc(part.material)}${part.glue ? ` · ghép ${esc(part.glue)}` : ''}` : '';
+  return `<section class="card blk sum current">
+    <header class="blk-head lv-${k}">
+      <span class="blk-lv">${LV_NAME[lvl] || 'Chi tiết'}</span>
+      <span class="blk-title">${esc(part.name)}</span>
+      ${ctx.team ? `<span class="blk-now">${esc(ctx.team.name)}</span>` : ''}
+    </header>
+    <div class="code">${esc(part.ref)}${part.code ? ` · ${esc(part.code)}` : ''}</div>
+    <div class="facts">
+      ${fact('Lệnh SX', `${esc(product.mo_no)}${product.lsx_stt ? ` · dòng ${esc(product.lsx_stt)}` : ''}`)}
+      ${isSP ? '' : fact('Sản phẩm', esc(product.name))}
+      ${isSP || isCum ? '' : fact('Cụm', cum ? esc(cum.name) : '<span class="muted">Chi tiết rời</span>')}
+      ${fact('Kích thước', part.size ? esc(part.size) : '')}
+      ${fact('Nguyên liệu', mat)}
+      ${fact('SL / SP', fmt(part.qty_per_unit))}
+      ${fact('SL cần', fmt(part.qty_required))}
+      ${product.due_date ? fact('Hạn giao', esc(fmtDate(product.due_date))) : ''}
+    </div>
+    ${stats ? `<div class="flow3">
+      <div class="f3"><span>Đã nhận vào</span><b>${fmt(Math.round(stats.inQty))}</b><small>${stats.fromTeam ? `từ ${esc(stats.fromTeam)}` : 'bắt đầu tại tổ'}</small></div>
+      <div class="f3 mid"><span>Đang làm</span><b>${fmt(Math.round(stats.wip))}</b><small>tại ${esc(ctx.team.name.replace(/^Tổ /, ''))}</small></div>
+      <div class="f3"><span>Đã giao đi</span><b>${fmt(Math.round(stats.outQty))}</b><small>${stats.toTeam ? `→ ${esc(stats.toTeam)}${stats.toPart ? ` (${esc(stats.toPart)})` : ''}` : 'hoàn thành'}</small></div>
+    </div>
+    <div class="bar" title="Đã giao / SL cần"><i style="width:${pct(stats.outQty, stats.required)}%"></i></div>` : ''}
+    <div class="route">${part.steps.map((s) => stepChip(s, s.team === teamCode)).join('')}</div>
+    ${isCum ? childTree('Chi tiết trong cụm', cum?.children || [], 'CT') : ''}
+    ${isSP ? childTree('Cụm / chi tiết rời', ctx.spChildren, 'CUM') : ''}
+  </section>`;
+}
 
-  const spBody = `
-    ${product.name_vi ? `<div class="muted">${esc(product.name_vi)}</div>` : ''}
-    <dl class="kv">
-      <dt>LSX</dt><dd>${esc(product.mo_no)}${product.lsx_stt ? ` · dòng ${esc(product.lsx_stt)}` : ''}</dd>
-      ${product.customer ? `<dt>Khách</dt><dd>${esc(product.customer)}</dd>` : ''}
-      ${product.code ? `<dt>Mã SP</dt><dd>${esc(product.code)}${product.bom_code ? ` · ${esc(product.bom_code)}` : ''}</dd>` : ''}
-      <dt>SL</dt><dd>${fmt(product.qty)} ${esc(product.unit)}</dd>
-      ${product.due_date ? `<dt>Hạn giao</dt><dd>${esc(fmtDate(product.due_date))}</dd>` : ''}
-      ${product.wood ? `<dt>Gỗ</dt><dd>${esc(product.wood)}${product.color ? ` · màu ${esc(product.color)}` : ''}</dd>` : ''}
-      ${isSP && part.size ? `<dt>Kích thước</dt><dd>${esc(part.size)}</dd>` : ''}
-    </dl>
-    ${product.steps.length ? route(product.steps, isSP) : ''}
-    ${isSP ? childTree('Cụm / chi tiết rời của sản phẩm', ctx.spChildren, 'CUM') : ''}`;
+/** Khối thu gọn (bấm để sổ ra) cho Cụm và Sản phẩm. */
+function foldCard(level, title, line, body) {
+  const [k, n] = lvOf(level);
+  return `<details class="card blk fold">
+    <summary class="blk-head lv-${k}"><span class="blk-lv">${n}</span><span class="blk-title">${esc(title)}</span><span class="chev" aria-hidden="true"></span></summary>
+    ${line ? `<div class="fold-line small muted">${line}</div>` : ''}
+    <div class="fold-body">${body}</div>
+  </details>`;
+}
 
-  let cumBlock = '';
-  if (cum) {
-    cumBlock = lvBlock('CUM', cum.name, isCum ? part.ref : cum.ref, `
+function parentCards(ctx) {
+  const { part, cum, product } = ctx;
+  const lvl = (part.level || '').toUpperCase();
+  let html = '';
+  if (cum && lvl === 'CT') {
+    html += foldCard('CUM', cum.name, `${esc(cum.ref)} · cần ${fmt(cum.qty_required)}`, `
       <dl class="kv">
         ${cum.code ? `<dt>Mã</dt><dd>${esc(cum.code)}</dd>` : ''}
-        ${isCum && part.size ? `<dt>Kích thước</dt><dd>${esc(part.size)}</dd>` : ''}
         <dt>SL / SP</dt><dd>${fmt(cum.qty_per_unit)}</dd>
         <dt>SL cần</dt><dd>${fmt(cum.qty_required)}</dd>
       </dl>
-      ${route(cum.steps, isCum)}
-      ${childTree('Chi tiết trong cụm', cum.children, 'CT')}`, isCum, 1);
-  } else if (!isSP) {
-    cumBlock = `<section class="card blk depth-1 ghost"><header class="blk-head lv-cum"><span class="blk-lv">Cụm</span><span class="blk-title">Chi tiết rời</span></header>
-      <p class="muted small" style="margin:0">Không thuộc cụm – ráp thẳng vào sản phẩm.</p></section>`;
+      <div class="route">${cum.steps.map((s) => stepChip(s, false)).join('')}</div>
+      ${childTree('Chi tiết trong cụm', cum.children, 'CT')}`);
   }
-
-  const ctBlock = !isSP && !isCum ? lvBlock('CT', part.name, part.ref, `
-    <div><span class="badge">${esc(part.kind)}</span></div>
-    <dl class="kv">
-      ${part.code ? `<dt>Mã</dt><dd>${esc(part.code)}</dd>` : ''}
-      ${part.size ? `<dt>Kích thước</dt><dd>${esc(part.size)}</dd>` : ''}
-      ${part.material ? `<dt>NVL</dt><dd>${esc(part.material)}${part.glue ? ` · ghép ${esc(part.glue)}` : ''}</dd>` : ''}
-      <dt>SL / SP</dt><dd>${fmt(part.qty_per_unit)}</dd>
-      <dt>SL cần</dt><dd>${fmt(part.qty_required)}</dd>
-    </dl>
-    ${route(part.steps, true)}`, true, 2) : '';
-
-  return `<div class="tree-blocks">${lvBlock('SP', product.name, product.ref, spBody, isSP, 0)}${cumBlock}${ctBlock}</div>`;
-}
-
-/* ---------------- Nhập sản lượng ---------------- */
-
-const palletKey = (ctx) => `pallet:${ctx.code}`;
-
-function defaultPallet(ctx) {
-  const open = ctx.pallets.filter((p) => !p.closed);
-  const last = store.get(palletKey(ctx), '');
-  if (open.some((p) => p.id === last)) return last;
-  return open[0]?.id || 'new';
-}
-
-function formCard(ctx) {
-  if (!ctx.team) {
-    return `<div class="card"><h2>Chọn tổ để nhập sản lượng</h2>
-      <p class="muted small">Mã quét không có hậu tố tổ. Chọn tổ:</p>
-      <div class="row gap wrap">${ctx.groups.map((g) => `<button class="btn" data-go="${esc(ctx.partRef)}-${esc(g.code)}">${esc(g.name)}</button>`).join('')}</div></div>`;
+  if (lvl !== 'SP') {
+    html += foldCard('SP', product.name, `${esc(product.mo_no)} · ${fmt(product.qty)} ${esc(product.unit)}${product.customer ? ` · ${esc(product.customer)}` : ''}`, `
+      ${product.name_vi ? `<div class="muted">${esc(product.name_vi)}</div>` : ''}
+      <dl class="kv">
+        <dt>LSX</dt><dd>${esc(product.mo_no)}${product.lsx_stt ? ` · dòng ${esc(product.lsx_stt)}` : ''}</dd>
+        ${product.customer ? `<dt>Khách</dt><dd>${esc(product.customer)}</dd>` : ''}
+        ${product.code ? `<dt>Mã SP</dt><dd>${esc(product.code)}${product.bom_code ? ` · ${esc(product.bom_code)}` : ''}</dd>` : ''}
+        <dt>SL</dt><dd>${fmt(product.qty)} ${esc(product.unit)}</dd>
+        ${product.due_date ? `<dt>Hạn giao</dt><dd>${esc(fmtDate(product.due_date))}</dd>` : ''}
+        ${product.wood ? `<dt>Gỗ</dt><dd>${esc(product.wood)}${product.color ? ` · màu ${esc(product.color)}` : ''}</dd>` : ''}
+      </dl>
+      ${product.steps.length ? `<div class="route">${product.steps.map((s) => stepChip(s, false)).join('')}</div>` : ''}`);
   }
-  // Tổ trưởng / người xem: chỉ hiện thông tin, không có khung nhập
-  if (!ctx.canWrite) return '';
-  const sel = state.pallet || defaultPallet(ctx);
-  state.pallet = sel;
-  const open = ctx.pallets.filter((p) => !p.closed);
-  const ng = ctx.hasNg;
-  const head = `<div class="step-head${ng ? ' ng' : ''}"><span></span><span>Công đoạn</span><span>SL đạt</span>${ng ? '<span>NG</span>' : ''}</div>`;
-  const steps = ctx.teamSteps.map((s) => {
-    const remain = Math.max(0, s.required - s.done);
-    const over = s.required && s.done > s.required;
-    return `<div class="step${ng ? ' ng' : ''}" data-step="${esc(s.id)}">
-      <input type="checkbox" class="pick" aria-label="Chọn ${esc(s.stage)}" ${ctx.teamSteps.length === 1 ? 'checked' : ''}>
-      <div>
-        <div class="name">${s.no}. ${esc(s.stage)}</div>
-        <div class="meta">Đã ${fmt(s.done)}/${fmt(s.required)} · còn ${fmt(remain)}${s.ng ? ` · NG ${fmt(s.ng)}` : ''}</div>
-        ${s.prevStage ? `<div class="meta">CĐ trước (${esc(s.prevStage)}): ${fmt(s.prevDone)}</div>` : ''}
-        <div class="bar${over ? ' over' : ''}"><i style="width:${pct(s.done, s.required)}%"></i></div>
-      </div>
-      <input type="number" class="qty" inputmode="numeric" min="0" step="1" placeholder="0" aria-label="Số lượng đạt ${esc(s.stage)}">
-      ${ng ? `<input type="number" class="ng-in" inputmode="numeric" min="0" step="1" placeholder="0" aria-label="Số lượng NG ${esc(s.stage)}">` : ''}
-    </div>`;
-  }).join('');
-  const nextNo = String(ctx.pallets.length + 1);
-
-  return `<div class="card" id="form-card">
-    <h2>Nhập sản lượng · ${esc(ctx.team.name)}</h2>
-    <div class="sec-label">Pallet</div>
-    <div class="pallets" role="group" aria-label="Chọn pallet">
-      ${open.map((p) => `<button type="button" class="pchip" data-pallet="${esc(p.id)}" aria-pressed="${p.id === sel}">
-        Pallet ${esc(p.no)}<small>${fmt(p.qty)} đã ghi${p.lot_go ? ` · lô ${esc(p.lot_go)}` : ''}</small></button>`).join('')}
-      <button type="button" class="pchip" data-pallet="new" aria-pressed="${sel === 'new'}">+ Pallet mới</button>
-    </div>
-    <div id="new-pallet" ${sel === 'new' ? '' : 'hidden'}>
-      <div class="grid3">
-        <label class="field">Số pallet<input id="np-no" value="${esc(nextNo)}" maxlength="30"></label>
-        <label class="field">Mã lô gỗ<input id="np-lotgo" maxlength="50"></label>
-        <label class="field">Mã lô dầu<input id="np-lotdau" maxlength="50"></label>
-      </div>
-    </div>
-
-    <div class="grid2">
-      <label class="field">Ngày làm<input type="date" id="f-date" value="${esc(ctx.today)}" max="${esc(ctx.today)}"></label>
-      <label class="field">Người / nhóm làm<input id="f-worker" maxlength="100" value="${esc(store.get('worker', ''))}" placeholder="Không bắt buộc"></label>
-    </div>
-
-    <h3>Công đoạn tại tổ (tick 1 hoặc nhiều)</h3>
-    ${ctx.teamSteps.length > 1 ? `<div class="fill">
-      <input type="number" id="fill-qty" inputmode="numeric" min="0" placeholder="SL chung" aria-label="Số lượng chung">
-      <button type="button" class="btn sm" id="btn-fill">Điền cho CĐ đã tick</button>
-      <button type="button" class="btn sm" id="btn-all">Tick tất cả</button>
-    </div>` : ''}
-    <div class="steps">${head}${steps}</div>
-
-    <label class="field" style="margin-top:10px">Ghi chú<input id="f-note" maxlength="300" placeholder="Không bắt buộc"></label>
-    <p id="f-msg" class="msg" role="alert"></p>
-    <button type="button" class="btn primary big" id="btn-save" style="margin-top:10px">Lưu sản lượng</button>
-  </div>`;
+  return html;
 }
 
-const statusBadge = (status, state) => {
-  const cls = state === 'waiting' ? ' warn' : state === 'open' ? '' : ' off';
+const statusBadge = (status, st) => {
+  const cls = st === 'waiting' ? ' warn' : st === 'open' ? '' : ' off';
   return `<span class="badge${cls}">${esc(status || 'Đang làm')}</span>`;
 };
 
-function palletCard(ctx) {
-  if (!ctx.team || !ctx.pallets.length) return '';
+function palletRow(ctx, p) {
   const stage = new Map(ctx.teamSteps.map((s) => [s.id, s.stage]));
-  return `<div class="card"><h2>Pallet của chi tiết tại tổ</h2><ul class="list">
-    ${ctx.pallets.map((p) => `<li>
-      <div class="row gap">
-        <b class="grow">Pallet ${esc(p.no)}</b>
-        ${statusBadge(p.status, p.state)}
-      </div>
-      <div class="small muted">${Object.entries(p.perStep).map(([id, q]) => `${esc(stage.get(id) || id)}: ${fmt(q)}`).join(' · ') || 'Chưa ghi sản lượng'}</div>
-      ${p.qtyIn ? `<div class="small muted">Nhận từ tổ trước: ${fmt(p.qtyIn)}</div>` : ''}
-      ${p.dest ? `<div class="small">Giao tới: <b>${esc(p.dest.teamName)}</b> · ${esc(p.dest.stage)}${p.dest.kind === 'parent' ? ` (${esc(p.dest.partName)})` : ''} · SL giao ${fmt(p.qtyOut)}</div>` : ''}
-      ${p.state === 'waiting' ? `<div class="small muted">Đã giao ${esc(p.delivered_at)}, chờ ${esc(p.dest?.teamName || 'tổ sau')} nhận</div>` : ''}
-      ${p.returned ? `<div class="notice small" style="margin-top:6px">${esc(p.note)}</div>` : ''}
-      <div class="small muted">${p.lot_go ? `Lô gỗ ${esc(p.lot_go)} · ` : ''}${p.lot_dau ? `Lô dầu ${esc(p.lot_dau)} · ` : ''}Tạo ${esc(p.created_at)}</div>
-      <div class="row gap wrap" style="margin-top:6px">
-        ${p.canDeliver ? `<button class="btn sm primary" data-deliver="${esc(p.id)}" data-q="${p.qtyOut}" data-to="${esc(p.dest.teamName)}">Giao ${fmt(p.qtyOut)} cho ${esc(p.dest.teamName)}</button>` : ''}
-        ${ctx.canLead && p.state === 'open' && p.dest && !p.qtyOut ? `<span class="small muted">Chưa có SL ở “${esc(p.exitStage)}” để giao</span>` : ''}
-        ${p.canFinish ? `<button class="btn sm" data-close="${esc(p.id)}">Hoàn thành pallet</button>` : ''}
-        ${p.closed && state.user?.admin ? `<button class="btn sm" data-reopen="${esc(p.id)}">Mở lại</button>` : ''}
-      </div>
-    </li>`).join('')}
-  </ul></div>`;
+  return `<li>
+    <div class="row gap"><b class="grow">Pallet ${esc(p.no)}</b>${statusBadge(p.status, p.state)}</div>
+    <div class="small">${Object.entries(p.perStep).map(([id, q]) => `${esc(stage.get(id) || id)}: <b>${fmt(q)}</b>`).join(' · ') || '<span class="muted">Chưa ghi sản lượng</span>'}</div>
+    ${p.qtyIn ? `<div class="small muted">Nhận từ tổ trước: ${fmt(p.qtyIn)}</div>` : ''}
+    ${p.dest && p.state !== 'open' ? `<div class="small muted">Giao ${fmt(p.qtyOut)} → ${esc(p.dest.teamName)}${p.delivered_at ? ` · ${esc(p.delivered_at)}` : ''}</div>` : ''}
+    ${p.returned ? `<div class="notice small" style="margin-top:6px">${esc(p.note)}</div>` : ''}
+    ${p.lot_go || p.lot_dau ? `<div class="small muted">${p.lot_go ? `Lô gỗ ${esc(p.lot_go)} ` : ''}${p.lot_dau ? `· Lô dầu ${esc(p.lot_dau)}` : ''}</div>` : ''}
+    <div class="row gap wrap" style="margin-top:6px">
+      ${p.canDeliver ? `<button class="btn sm primary" data-deliver="${esc(p.id)}" data-q="${p.qtyOut}" data-to="${esc(p.dest.teamName)}">Giao ${fmt(p.qtyOut)} cho ${esc(p.dest.teamName)}</button>` : ''}
+      ${ctx.canLead && p.state === 'open' && p.dest && !p.qtyOut ? `<span class="small muted">Chưa có SL ở “${esc(p.exitStage)}” để giao</span>` : ''}
+      ${p.canFinish ? `<button class="btn sm" data-close="${esc(p.id)}">Hoàn thành pallet</button>` : ''}
+      ${p.closed && state.user?.admin ? `<button class="btn sm" data-reopen="${esc(p.id)}">Mở lại</button>` : ''}
+    </div>
+  </li>`;
+}
+
+function palletBlocks(ctx) {
+  if (!ctx.team) return '';
+  const open = ctx.pallets.filter((p) => p.state === 'open');
+  const gone = ctx.pallets.filter((p) => p.state !== 'open');
+  const SHOW = 10;
+  return `<section class="card"><h2>Pallet đang làm <span class="badge">${open.length}</span></h2>
+      ${open.length ? `<ul class="list">${open.map((p) => palletRow(ctx, p)).join('')}</ul>` : '<p class="muted small">Chưa có pallet nào đang làm tại tổ.</p>'}
+    </section>
+    <section class="card"><h2>Pallet đã giao <span class="badge off">${gone.length}</span></h2>
+      ${gone.length ? `<ul class="list">${gone.slice(0, SHOW).map((p) => palletRow(ctx, p)).join('')}</ul>
+        ${gone.length > SHOW ? `<details><summary class="small">Xem thêm ${gone.length - SHOW} pallet</summary><ul class="list">${gone.slice(SHOW).map((p) => palletRow(ctx, p)).join('')}</ul></details>` : ''}`
+        : '<p class="muted small">Chưa giao pallet nào.</p>'}
+    </section>`;
 }
 
 function incomingCard(ctx) {
@@ -504,117 +483,333 @@ function incomingCard(ctx) {
 
 function logCard(ctx) {
   if (!ctx.team) return '';
-  if (!ctx.logs.length) return '<div class="card"><h2>Nhật ký</h2><p class="muted">Chưa có ghi nhận nào cho chi tiết này tại tổ.</p></div>';
-  return `<div class="card"><h2>Nhật ký gần đây</h2><ul class="list">
+  if (!ctx.logs.length) return '<details class="card"><summary><span class="grow">Nhật ký</span><span class="badge off">0</span></summary><p class="muted small">Chưa có ghi nhận nào.</p></details>';
+  return `<details class="card"><summary><span class="grow">Nhật ký gần đây</span><span class="badge">${ctx.logs.length}</span></summary><ul class="list">
     ${ctx.logs.map((l) => `<li class="log${l.cancelled ? ' cancelled' : ''}${l.reversal ? ' reversal' : ''}">
-      <div class="what"><b>${esc(l.stage)}</b> · Pallet ${esc(l.pallet_no || '?')}</div>
+      <div class="what"><b>${esc(l.stage)}</b> · Pallet ${esc(l.pallet_no || '–')}</div>
       <div class="q">${fmt(l.qty)}${l.ng ? ` <span class="small" style="color:var(--bad)">NG ${fmt(l.ng)}</span>` : ''}</div>
       <div class="small muted">Ngày ${esc(l.date)}${l.worker ? ` · ${esc(l.worker)}` : ''} · ${esc(l.by)} · ${esc(l.at)}${l.note ? `<br>${esc(l.note)}` : ''}${l.cancelled ? '<br><b>Đã huỷ</b>' : ''}</div>
       <div>${l.canCancel ? `<button class="btn sm danger" data-cancel="${esc(l.id)}">Huỷ</button>` : ''}</div>
     </li>`).join('')}
-  </ul></div>`;
+  </ul></details>`;
+}
+
+function teamPicker(ctx) {
+  return `<div class="card"><h2>Chọn tổ</h2>
+    <p class="muted small">Mã quét không có mã tổ. Chi tiết này đi qua các tổ:</p>
+    <div class="row gap wrap">${ctx.groups.map((g) => `<button class="btn" data-go="${esc(ctx.partRef)}-${esc(g.code)}">${esc(g.name)}</button>`).join('')}</div></div>`;
 }
 
 function renderItem() {
   const ctx = state.ctx;
   const v = $('#v-item');
+  const entry = ctx.team && ctx.canWrite
+    ? `<button class="btn primary big entry-btn" id="btn-entry">＋ Nhập sản lượng · ${esc(ctx.team.name)}</button>` : '';
   const transfer = canTransfer() && (ctx.part.level || '').toUpperCase() === 'CT'
-    ? `<div class="card"><button class="btn" data-transfer="${esc(ctx.partRef)}">Chuyển chi tiết này sang LSX khác…</button></div>` : '';
-  v.innerHTML = backBar(ctx) + incomingCard(ctx) + formCard(ctx) + infoCard(ctx) + palletCard(ctx) + logCard(ctx) + transfer;
+    ? `<button class="btn" data-transfer="${esc(ctx.partRef)}" style="width:100%">Chuyển chi tiết này sang LSX khác…</button>` : '';
+  v.innerHTML = backBar(ctx)
+    + summaryCard(ctx)
+    + parentCards(ctx)
+    + (ctx.team ? '' : teamPicker(ctx))
+    + incomingCard(ctx)
+    + palletBlocks(ctx)
+    + entry
+    + logCard(ctx)
+    + transfer;
   bindCommon(v);
-  bindForm(v, ctx);
   bindHandover(v, () => openCode(ctx.code, false));
-  $('[data-transfer]', v)?.addEventListener('click', (e) => goTab('transfer', `&ref=${encodeURIComponent(e.currentTarget.dataset.transfer)}`));
-}
-
-function bindForm(v, ctx) {
-  $$('[data-pallet]', v).forEach((b) => b.addEventListener('click', () => {
-    state.pallet = b.dataset.pallet;
-    $$('[data-pallet]', v).forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-    $('#new-pallet', v).hidden = state.pallet !== 'new';
-  }));
-  $$('.step', v).forEach((row) => {
-    const pick = $('.pick', row);
-    $$('input[type="number"]', row).forEach((inp) => inp.addEventListener('input', () => {
-      if (Number(inp.value) > 0) pick.checked = true;
-    }));
-  });
-  $('#btn-fill', v)?.addEventListener('click', () => {
-    const q = $('#fill-qty', v).value;
-    $$('.step', v).forEach((row) => { if ($('.pick', row).checked) $('.qty', row).value = q; });
-  });
-  $('#btn-all', v)?.addEventListener('click', () => {
-    const all = $$('.step .pick', v);
-    const target = !all.every((c) => c.checked);
-    all.forEach((c) => { c.checked = target; });
-  });
-  $('#btn-save', v)?.addEventListener('click', () => save(v, ctx, false));
+  $('#btn-entry', v)?.addEventListener('click', () => openEntry(ctx));
   $$('[data-close]', v).forEach((b) => b.addEventListener('click', () => palletAction(b.dataset.close, 'close')));
   $$('[data-reopen]', v).forEach((b) => b.addEventListener('click', () => palletAction(b.dataset.reopen, 'reopen')));
   $$('[data-cancel]', v).forEach((b) => b.addEventListener('click', () => cancelLog(b.dataset.cancel)));
+  $('[data-transfer]', v)?.addEventListener('click', (e) => goTab('transfer', `&ref=${encodeURIComponent(e.currentTarget.dataset.transfer)}`));
 }
 
-function collect(v, ctx) {
-  const entries = [];
-  for (const row of $$('.step', v)) {
-    if (!$('.pick', row).checked) continue;
-    const qtyRaw = $('.qty', row).value.trim();
-    const ngRaw = $('.ng-in', row)?.value.trim() || '';
-    const qty = qtyRaw === '' ? 0 : Number(qtyRaw);
-    const ng = ngRaw === '' ? 0 : Number(ngRaw);
-    const s = ctx.teamSteps.find((x) => x.id === row.dataset.step);
-    if (!Number.isInteger(qty) || qty < 0 || !Number.isInteger(ng) || ng < 0) throw new Error(`${s.stage}: số lượng phải là số nguyên ≥ 0`);
-    if (qty || ng) entries.push({ id: s.id, stage: s.stage, qty, ng });
-  }
-  if (!entries.length) throw new Error('Tick công đoạn và nhập số lượng');
-  const body = {
-    action: 'add', code: ctx.code, entries: entries.map(({ id, qty, ng }) => ({ id, qty, ng })),
-    work_date: $('#f-date', v).value, worker: $('#f-worker', v).value, note: $('#f-note', v).value,
+/* ================= Pop-up nhập sản lượng: 1 Chọn pallet → 2 Nhập → 3 Xác nhận ================= */
+
+const MAX_QTY = 100000;
+const palletKey = (ctx) => `pallet:${ctx.code}`;
+
+function openEntry(ctx) {
+  const open = ctx.pallets.filter((p) => p.state === 'open');
+  const last = store.get(palletKey(ctx), '');
+  state.entry = {
+    ctx, step: 1,
+    pallet: open.some((p) => p.id === last) ? last : (open[0]?.id || 'new'),
+    np: { no: String(ctx.pallets.length + 1), lot_go: '', lot_dau: '' },
+    date: ctx.today, worker: store.get('worker', ''), note: '',
+    vals: {}, serverWarnings: null, busy: false, fill: null,
   };
-  if (state.pallet === 'new') {
-    body.new_pallet = { no: $('#np-no', v).value, lot_go: $('#np-lotgo', v).value, lot_dau: $('#np-lotdau', v).value };
-    if (!body.new_pallet.no.trim()) throw new Error('Nhập số pallet mới');
-  } else body.pallet_id = state.pallet;
-  return { body, entries };
+  renderEntry();
+  $('#entry').showModal();
 }
 
-async function save(v, ctx, confirm) {
-  if (state.busy) return;
-  const msg = $('#f-msg', v);
-  msg.textContent = '';
-  let req;
-  try { req = collect(v, ctx); } catch (e) { msg.textContent = e.message; return; }
-  req.body.confirm = confirm;
-  const btn = $('#btn-save', v);
-  state.busy = true;
-  btn.disabled = true;
-  btn.textContent = 'Đang lưu…';
-  try {
-    const r = await api('/api/output', { method: 'POST', body: req.body });
-    if (r.status === 409) {
-      state.busy = false;
-      const ok = await ask('Kiểm tra lại số lượng', `<ul>${r.warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul><p>Vẫn lưu?</p>`, 'Vẫn lưu');
-      btn.disabled = false;
-      btn.textContent = 'Lưu sản lượng';
-      if (ok) return save(v, ctx, true);
+function entryHead(title, step) {
+  return `<header class="sheet-head">
+    <button type="button" class="link sheet-x" data-ex="close" aria-label="Đóng">✕</button>
+    <div class="grow"><div class="sheet-title">${title}</div>
+      <div class="steps-dots">${[1, 2, 3].map((i) => `<i class="${i <= step ? 'on' : ''}"></i>`).join('')}<span>Bước ${step}/3</span></div></div>
+  </header>`;
+}
+
+function palletLabel(e) {
+  if (e.pallet === 'new') return `Pallet mới ${esc(e.np.no)}`;
+  const p = e.ctx.pallets.find((x) => x.id === e.pallet);
+  return `Pallet ${esc(p?.no)}`;
+}
+
+function renderEntry() {
+  const e = state.entry;
+  const d = $('#entry');
+  const { ctx } = e;
+  const s = e.step;
+  let body = '';
+  let foot = '';
+  if (s === 1) {
+    const open = ctx.pallets.filter((p) => p.state === 'open');
+    body = `<p class="small muted">Chọn pallet đang làm tại ${esc(ctx.team.name)}, hoặc tạo pallet mới.</p>
+      <div class="pick-list">
+        ${open.map((p) => `<label class="pick${e.pallet === p.id ? ' on' : ''}"><input type="radio" name="ep" value="${esc(p.id)}" ${e.pallet === p.id ? 'checked' : ''}>
+          <span><b>Pallet ${esc(p.no)}</b>${p.returned ? ' <span class="badge warn">Bị trả lại</span>' : ''}
+          <small>${Object.values(p.perStep).length ? `${fmt(p.qty)} đã ghi` : 'Chưa ghi'}${p.qtyIn ? ` · nhận vào ${fmt(p.qtyIn)}` : ''}${p.lot_go ? ` · lô ${esc(p.lot_go)}` : ''}</small></span></label>`).join('')}
+        <label class="pick${e.pallet === 'new' ? ' on' : ''}"><input type="radio" name="ep" value="new" ${e.pallet === 'new' ? 'checked' : ''}>
+          <span><b>＋ Pallet mới</b><small>Tạo pallet mới tại tổ</small></span></label>
+      </div>
+      <div id="ep-new" class="grid3" ${e.pallet === 'new' ? '' : 'hidden'}>
+        <label class="field">Số pallet *<input id="np-no" value="${esc(e.np.no)}" maxlength="30"></label>
+        <label class="field">Mã lô gỗ<input id="np-lotgo" value="${esc(e.np.lot_go)}" maxlength="50"></label>
+        <label class="field">Mã lô dầu<input id="np-lotdau" value="${esc(e.np.lot_dau)}" maxlength="50"></label>
+      </div>
+      <p class="msg" id="ex-msg" role="alert"></p>`;
+    foot = '<button type="button" class="btn" data-ex="close">Huỷ</button><button type="button" class="btn primary grow" data-ex="next1">Tiếp: nhập số lượng →</button>';
+  } else if (s === 2) {
+    const ng = ctx.hasNg;
+    body = `<div class="ex-ctx small"><b>${palletLabel(e)}</b> · ${esc(ctx.part.name)} · ${esc(ctx.team.name)}</div>
+      <div class="grid2">
+        <label class="field">Ngày làm<input type="date" id="ex-date" value="${esc(e.date)}" max="${esc(ctx.today)}"></label>
+        <label class="field">Người / nhóm làm<input id="ex-worker" maxlength="100" value="${esc(e.worker)}" placeholder="Không bắt buộc"></label>
+      </div>
+      ${ctx.teamSteps.length > 1 ? `<div class="fill"><input type="number" id="ex-fill" inputmode="numeric" min="0" placeholder="Cùng 1 SL cho mọi công đoạn"><button type="button" class="btn sm" data-ex="fill">Điền tất cả</button></div>` : ''}
+      <div class="erows${ng ? ' ng' : ''}">
+        <div class="erow head"><span>Công đoạn</span><span>SL đạt</span>${ng ? '<span>NG</span>' : ''}</div>
+        ${ctx.teamSteps.map((st) => {
+          const v = e.vals[st.id] || {};
+          const remain = Math.max(0, st.required - st.done);
+          return `<div class="erow" data-step="${esc(st.id)}">
+            <div class="einfo"><b>${st.no}. ${esc(st.stage)}</b>
+              <small>Đã ${fmt(st.done)}/${fmt(st.required)} · còn ${fmt(remain)}</small>
+              ${st.prevStage ? `<small>CĐ trước ${esc(st.prevStage)}: ${fmt(st.prevDone)}</small>` : ''}</div>
+            <input type="number" class="eq" inputmode="numeric" min="0" step="1" placeholder="0" value="${v.qty ?? ''}" aria-label="SL đạt ${esc(st.stage)}">
+            ${ng ? `<input type="number" class="en" inputmode="numeric" min="0" step="1" placeholder="0" value="${v.ng ?? ''}" aria-label="NG ${esc(st.stage)}">` : ''}
+          </div>`;
+        }).join('')}
+      </div>
+      <label class="field" style="margin-top:10px">Ghi chú<input id="ex-note" maxlength="300" value="${esc(e.note)}" placeholder="Không bắt buộc"></label>
+      <p class="msg" id="ex-msg" role="alert"></p>`;
+    foot = '<button type="button" class="btn" data-ex="back">← Pallet</button><button type="button" class="btn primary grow" data-ex="next2">Kiểm tra →</button>';
+  } else {
+    const own = entryRows(e);
+    const skips = skipRows(e, own);
+    const rows = e.fill === true ? [...own, ...skips].sort((a, b) => a.st.no - b.st.no) : own;
+    const { warnings, errors } = checkEntry(e, rows);
+    const all = [...warnings, ...(e.serverWarnings || [])].filter((w, i, a) => a.indexOf(w) === i);
+    const needFill = skips.length > 0 && e.fill === null;
+    body = `<div class="ex-ctx small"><b>${palletLabel(e)}</b> · ${esc(ctx.part.name)} · ${esc(ctx.team.name)}</div>
+      <table class="tbl confirm"><tbody>
+        <tr><th>Ngày làm</th><td>${esc(fmtDate(e.date))}${e.date !== ctx.today ? ' <span class="badge warn">nhập lùi</span>' : ''}</td></tr>
+        ${e.worker ? `<tr><th>Người làm</th><td>${esc(e.worker)}</td></tr>` : ''}
+        ${rows.map((r) => `<tr${r.auto ? ' class="auto"' : ''}><th>${esc(r.st.stage)}</th><td><b>${fmt(r.qty)}</b>${r.ng ? ` · NG ${fmt(r.ng)}` : ''}${r.auto ? ' <span class="badge">bù</span>' : ''} <span class="small muted">→ tổng ${fmt(r.st.done + r.qty)}/${fmt(r.st.required)}</span></td></tr>`).join('')}
+        ${e.note ? `<tr><th>Ghi chú</th><td>${esc(e.note)}</td></tr>` : ''}
+      </tbody></table>
+      ${skips.length ? `<div class="ex-skip">
+        <b>⚠ Nhập nhảy cóc – bỏ qua ${skips.length} công đoạn</b>
+        <p class="small">Pallet này có công đoạn sau nhiều hơn công đoạn trước chưa nhập:</p>
+        <ul>${skips.map((r) => `<li><b>${esc(r.st.stage)}</b>: thiếu ${fmt(r.qty)}</li>`).join('')}</ul>
+        <p class="small">Ghi luôn số lượng này cho các công đoạn bị bỏ qua?</p>
+        <div class="seg2">
+          <label class="pick${e.fill === true ? ' on' : ''}"><input type="radio" name="ex-fill" value="1" ${e.fill === true ? 'checked' : ''}><span><b>Đồng ý ghi bù</b><small>Thêm ${skips.length} dòng, ghi chú "Bù CĐ bỏ qua"</small></span></label>
+          <label class="pick${e.fill === false ? ' on' : ''}"><input type="radio" name="ex-fill" value="0" ${e.fill === false ? 'checked' : ''}><span><b>Không</b><small>Chỉ lưu số đã nhập</small></span></label>
+        </div>
+      </div>` : ''}
+      ${errors.length ? `<div class="ex-err"><b>Không lưu được:</b><ul>${errors.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
+      ${all.length ? `<div class="ex-warn"><b>Cảnh báo – kiểm tra lại:</b><ul>${all.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
+        <label class="ack"><input type="checkbox" id="ex-ack"> Tôi đã kiểm tra, số liệu đúng</label></div>`
+        : (errors.length ? '' : '<div class="ex-ok">✓ Số liệu hợp lệ</div>')}
+      <p class="msg" id="ex-msg" role="alert"></p>`;
+    foot = `<button type="button" class="btn" data-ex="back">← Sửa</button>
+      <button type="button" class="btn primary grow" data-ex="save" ${errors.length || all.length || needFill ? 'disabled' : ''}>${e.busy ? 'Đang lưu…' : needFill ? 'Chọn ghi bù hay không' : 'Lưu sản lượng'}</button>`;
+    e.needAck = all.length > 0;
+    e.hasError = errors.length > 0 || needFill;
+  }
+  const titles = { 1: 'Chọn pallet', 2: 'Nhập số lượng', 3: 'Xác nhận trước khi lưu' };
+  d.innerHTML = `<form method="dialog" class="sheet" onsubmit="return false">${entryHead(titles[s], s)}<div class="sheet-body">${body}</div><footer class="sheet-foot">${foot}</footer></form>`;
+  bindEntry(d);
+}
+
+/** Đọc các ô nhập ở bước 2 vào state. */
+function readStep2(d) {
+  const e = state.entry;
+  e.date = $('#ex-date', d).value;
+  e.worker = $('#ex-worker', d).value.trim();
+  e.note = $('#ex-note', d).value.trim();
+  for (const row of $$('.erow[data-step]', d)) {
+    const q = $('.eq', row).value.trim();
+    const n = $('.en', row)?.value.trim() ?? '';
+    e.vals[row.dataset.step] = { qty: q, ng: n };
+  }
+}
+
+function entryRows(e) {
+  return e.ctx.teamSteps.map((st) => {
+    const v = e.vals[st.id] || {};
+    return { st, qtyRaw: v.qty ?? '', ngRaw: v.ng ?? '', qty: Number(v.qty || 0), ng: Number(v.ng || 0) };
+  }).filter((r) => r.qtyRaw !== '' || r.ngRaw !== '');
+}
+
+/**
+ * Công đoạn trong tổ bị bỏ trống nằm trước công đoạn có nhập (nhảy cóc) → SL cần ghi bù.
+ * Cùng thuật toán với skipFill ở api/output.js (server tính lại khi lưu).
+ */
+function skipRows(e, rows) {
+  const per = e.ctx.pallets.find((p) => p.id === e.pallet)?.perStep || {};
+  const got = new Map(rows.filter((r) => r.qty > 0 || r.ng > 0).map((r) => [r.st.id, r.qty]));
+  const out = [];
+  let need = 0;
+  for (const st of [...e.ctx.teamSteps].reverse()) {
+    const cur = (per[st.id] || 0) + (got.get(st.id) || 0);
+    if (got.has(st.id)) need = Math.max(need, cur);
+    else if (need > cur) out.unshift({ st, qty: need - cur, ng: 0, qtyRaw: String(need - cur), ngRaw: '', auto: true });
+  }
+  return out;
+}
+
+/** Lỗi (chặn lưu) và cảnh báo (cần tick xác nhận). Server kiểm tra lại toàn bộ. */
+function checkEntry(e, rows) {
+  const { ctx } = e;
+  const errors = [];
+  const warnings = [];
+  const isInt = (n) => Number.isInteger(n) && n >= 0 && n <= MAX_QTY;
+  for (const r of rows) {
+    if (!isInt(r.qty)) errors.push(`${r.st.stage}: SL đạt phải là số nguyên từ 0 đến ${fmt(MAX_QTY)}`);
+    if (!isInt(r.ng)) errors.push(`${r.st.stage}: NG phải là số nguyên từ 0 đến ${fmt(MAX_QTY)}`);
+  }
+  const used = rows.filter((r) => r.qty > 0 || r.ng > 0);
+  if (!used.length) errors.push('Chưa nhập số lượng cho công đoạn nào');
+  if (!e.date) errors.push('Chọn ngày làm');
+  else if (e.date > ctx.today) errors.push('Ngày làm không được ở tương lai');
+  else {
+    const back = Math.round((new Date(ctx.today) - new Date(e.date)) / 864e5);
+    if (back > 7 && !state.user?.admin) errors.push(`Chỉ được nhập lùi tối đa 7 ngày (đang lùi ${back} ngày)`);
+    else if (back > 0) warnings.push(`Nhập lùi ${back} ngày (ngày ${fmtDate(e.date)})`);
+  }
+  if (e.pallet === 'new') {
+    const no = e.np.no.trim();
+    if (!no) errors.push('Nhập số pallet mới');
+    if (ctx.pallets.some((p) => String(p.no).trim().toLowerCase() === no.toLowerCase())) errors.push(`Pallet "${no}" đã có – hãy chọn trong danh sách`);
+  }
+  const batch = new Map(used.map((r) => [r.st.id, r.qty]));
+  const pal = ctx.pallets.find((p) => p.id === e.pallet);
+  for (const r of used) {
+    const total = r.st.done + r.qty;
+    if (r.st.required && total > r.st.required) warnings.push(`${r.st.stage}: tổng sau khi nhập ${fmt(total)} > SL cần ${fmt(r.st.required)}`);
+    if (r.st.prevId && r.qty) {
+      const avail = (r.st.prevDone || 0) + (batch.get(r.st.prevId) || 0);
+      if (total > avail) warnings.push(`${r.st.stage}: tổng ${fmt(total)} > công đoạn trước "${r.st.prevStage}" (${fmt(avail)})`);
+    }
+    if (pal?.qtyIn && (pal.perStep[r.st.id] || 0) + r.qty > pal.qtyIn) warnings.push(`${r.st.stage}: pallet sẽ có ${fmt((pal.perStep[r.st.id] || 0) + r.qty)} > SL nhận vào pallet ${fmt(pal.qtyIn)}`);
+    if (r.ng && r.ng > r.qty) warnings.push(`${r.st.stage}: NG (${fmt(r.ng)}) nhiều hơn SL đạt (${fmt(r.qty)})`);
+  }
+  // Công đoạn sau nhiều hơn công đoạn trước trong cùng lần nhập (dòng ghi bù chỉ là phần thiếu → không so)
+  for (let i = 1; i < used.length; i++) {
+    if (used[i].auto || used[i - 1].auto) continue;
+    if (used[i].qty > used[i - 1].qty && used[i].st.prevId === used[i - 1].st.id) {
+      warnings.push(`${used[i].st.stage} (${fmt(used[i].qty)}) nhiều hơn ${used[i - 1].st.stage} (${fmt(used[i - 1].qty)}) trong cùng lần nhập`);
+    }
+  }
+  return { errors, warnings: [...new Set(warnings)] };
+}
+
+function bindEntry(d) {
+  const e = state.entry;
+  const msg = (t) => { const m = $('#ex-msg', d); if (m) m.textContent = t; };
+  $$('input[name="ep"]', d).forEach((r) => r.addEventListener('change', () => {
+    e.pallet = r.value;
+    $$('.pick', d).forEach((l) => l.classList.toggle('on', $('input', l).checked));
+    $('#ep-new', d).hidden = e.pallet !== 'new';
+  }));
+  $('#ex-ack', d)?.addEventListener('change', (ev) => { $('[data-ex="save"]', d).disabled = !ev.target.checked || e.hasError; });
+  $$('input[name="ex-fill"]', d).forEach((r) => r.addEventListener('change', () => {
+    e.fill = r.value === '1';
+    e.serverWarnings = null;
+    renderEntry();
+  }));
+  $$('[data-ex]', d).forEach((b) => b.addEventListener('click', async () => {
+    const a = b.dataset.ex;
+    if (a === 'close') { d.close(); return; }
+    if (a === 'next1') {
+      if (e.pallet === 'new') {
+        e.np = { no: $('#np-no', d).value.trim(), lot_go: $('#np-lotgo', d).value.trim(), lot_dau: $('#np-lotdau', d).value.trim() };
+        if (!e.np.no) return msg('Nhập số pallet mới');
+        if (e.ctx.pallets.some((p) => String(p.no).trim().toLowerCase() === e.np.no.toLowerCase())) return msg(`Pallet "${e.np.no}" đã có – hãy chọn trong danh sách`);
+      }
+      e.step = 2; renderEntry(); $('.eq', d)?.focus(); return;
+    }
+    if (a === 'fill') {
+      const q = $('#ex-fill', d).value;
+      $$('.eq', d).forEach((i) => { i.value = q; });
       return;
     }
-    store.set('worker', req.body.worker || '');
-    const keepPallet = req.body.pallet_id;
+    if (a === 'next2') {
+      readStep2(d);
+      const rows = entryRows(e);
+      const bad = rows.find((r) => !Number.isInteger(r.qty) || r.qty < 0 || !Number.isInteger(r.ng) || r.ng < 0);
+      if (bad) return msg(`${bad.st.stage}: số lượng phải là số nguyên ≥ 0`);
+      if (!rows.some((r) => r.qty > 0 || r.ng > 0)) return msg('Nhập số lượng cho ít nhất 1 công đoạn');
+      e.serverWarnings = null;
+      e.fill = null;
+      e.step = 3; renderEntry(); return;
+    }
+    if (a === 'back') { e.step -= 1; renderEntry(); return; }
+    if (a === 'save') saveEntry(d);
+  }));
+}
+
+async function saveEntry(d) {
+  const e = state.entry;
+  if (e.busy) return;
+  const { ctx } = e;
+  const rows = entryRows(e).filter((r) => r.qty > 0 || r.ng > 0);
+  const body = {
+    action: 'add', code: ctx.code, work_date: e.date, worker: e.worker, note: e.note,
+    entries: rows.map((r) => ({ id: r.st.id, qty: r.qty, ng: r.ng })),
+    confirm: !!e.needAck, // người dùng đã tick "đã kiểm tra" cho các cảnh báo
+    fill_skipped: e.fill === true, // đồng ý ghi bù các công đoạn bị bỏ qua (server tự tính lại)
+  };
+  if (e.pallet === 'new') body.new_pallet = e.np; else body.pallet_id = e.pallet;
+  e.busy = true;
+  const btn = $('[data-ex="save"]', d);
+  btn.disabled = true; btn.textContent = 'Đang lưu…';
+  try {
+    const r = await api('/api/output', { method: 'POST', body });
+    e.busy = false;
+    if (r.status === 409) { // server thấy cảnh báo mà máy chưa thấy → bắt xác nhận lại
+      e.serverWarnings = r.warnings;
+      renderEntry();
+      return;
+    }
+    store.set('worker', e.worker);
+    const id = body.pallet_id || r.context.pallets.find((p) => p.no === e.np.no)?.id;
+    if (id) store.set(palletKey(r.context), id);
     state.ctx = r.context;
-    // Pallet vừa tạo: chọn lại theo số pallet
-    const newId = keepPallet || r.context.pallets.find((p) => p.no === String(req.body.new_pallet?.no || '').trim())?.id;
-    if (newId) store.set(palletKey(r.context), newId);
-    state.pallet = null;
+    d.close();
     renderItem();
-    toast(`Đã lưu: ${req.entries.map((e) => `${e.stage} ${fmt(e.qty)}`).join(', ')}`);
-  } catch (e) {
-    if (e.status === 401) return;
-    msg.textContent = e.message;
-    btn.disabled = false;
-    btn.textContent = 'Lưu sản lượng';
-  } finally {
-    state.busy = false;
+    const filled = e.fill === true ? skipRows(e, rows).length : 0;
+    toast(`Đã lưu ${palletLabel(e).replace(/&[^;]+;/g, '')}: ${rows.map((x) => `${x.st.stage} ${fmt(x.qty)}`).join(', ')}${filled ? ` (+ bù ${filled} CĐ bỏ qua)` : ''}`);
+  } catch (err) {
+    e.busy = false;
+    if (err.status === 401) { d.close(); return; }
+    btn.disabled = false; btn.textContent = 'Lưu sản lượng';
+    $('#ex-msg', d).textContent = err.message;
   }
 }
 

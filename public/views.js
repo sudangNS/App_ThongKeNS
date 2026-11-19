@@ -242,13 +242,23 @@ function showMore() {
         <dt>Tổ trưởng</dt><dd>${esc(u.admin ? 'tất cả (quản lý)' : names(u.leadTeams))}</dd>
       </dl>
     </div>
+    <div class="card">
+      <h2>Giao diện</h2>
+      <div class="seg" role="group" aria-label="Giao diện sáng tối" id="theme-seg">
+        ${THEMES.map(([k, n]) => `<button type="button" data-theme-set="${k}" aria-pressed="${store.get('theme', 'auto') === k}">${n}</button>`).join('')}
+      </div>
+      <p class="small muted">"Theo máy" tự đổi sáng/tối theo cài đặt của điện thoại.</p>
+    </div>
     <div class="card menu">
       ${canTransfer() ? '<button class="item" data-go-tab="transfer">Chuyển chi tiết giữa LSX<span class="small muted">Cùng BOM, có nhật ký</span></button>' : ''}
       <button class="item" data-go-tab="work">Pallet bị trả lại / việc của tôi</button>
       ${installEvt ? '<button class="item" id="more-install">Cài app vào điện thoại</button>' : ''}
       <button class="item danger" id="more-logout">Đăng xuất</button>
-    </div>
-    <p class="small muted center-text">Giao diện sáng/tối theo cài đặt của điện thoại.</p>`;
+    </div>`;
+  $$('[data-theme-set]', $('#v-more')).forEach((b) => b.addEventListener('click', () => {
+    setTheme(b.dataset.themeSet);
+    $$('[data-theme-set]', $('#v-more')).forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  }));
   $$('[data-go-tab]', $('#v-more')).forEach((b) => b.addEventListener('click', () => goTab(b.dataset.goTab)));
   $('#more-install')?.addEventListener('click', () => $('#btn-install').click());
   $('#more-logout').addEventListener('click', logout);

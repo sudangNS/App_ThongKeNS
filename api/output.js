@@ -1,6 +1,7 @@
 // POST /api/output
 //   { action: "add", code, pallet_id | new_pallet:{no, lot_go, lot_dau}, work_date:"YYYY-MM-DD",
-//     worker, note, entries:[{ id: mo_route_id, qty, ng }], confirm }
+//     worker, note, entries:[{ id: mo_route_id, qty, ng }], confirm, fill_skipped }
+//   fill_skipped=true: ghi bù SL cho các công đoạn trong tổ bị bỏ trống phía trước (ghi chú "Bù CĐ bỏ qua").
 //   { action: "cancel", code, log_id }
 // Ghi vào tab Pallet Log (và Pallet khi tạo pallet mới). Chỉ nhận công đoạn của chi tiết
 // thuộc đúng tổ trong mã QR → không thể nhập lẫn nhiều tổ trong 1 lần.
@@ -84,6 +85,15 @@ async function add(body, ctx, acc, t) {
     };
   }
 
+  // ----- Công đoạn bị bỏ qua (nhảy cóc) -----
+  // Người dùng đồng ý → ghi bù cho các công đoạn trước (cùng tổ, cùng pallet) bị bỏ trống,
+  // để SL lũy kế của pallet không giảm dần ngược chiều quy trình.
+  if (body.fill_skipped === true) {
+    entries.push(...skipFill(ctx.teamSteps, pallet?.perStep || {}, entries).map(({ s, qty }) => ({ s, qty, ng: 0, auto: true })));
+    entries.sort((a, b) => a.s.no - b.s.no);
+    if (newPallet) newPallet.mo_route_id = entries[0].s.id;
+  }
+
   // ----- Cảnh báo (cần xác nhận) -----
   const batchQty = new Map(entries.map((e) => [e.s.id, e.qty]));
   const warnings = [];
@@ -103,13 +113,34 @@ async function add(body, ctx, acc, t) {
   const now = vnNow().stamp;
   const palletId = pallet?.id || newPallet.pallet_id;
   if (newPallet) await appendObjects('pallet', t.pallet.header, [newPallet]);
-  await appendObjects('pallet_log', t.pallet_log.header, entries.map(({ s, qty, ng }) => ({
+  // Ghi chú người dùng không được giả dạng dòng huỷ / chuyển
+  const note = String(body.note || '').replace(/^\s*(huỷ|chuyển)\s/i, '- ');
+  await appendObjects('pallet_log', t.pallet_log.header, entries.map(({ s, qty, ng, auto }) => ({
     log_id: newId(), pallet_id: palletId, mo_route_id: s.id, work_date: isoToVn(day),
     start_time: '', end_time: '', worker: textCell(body.worker, 100), qty, qty_ng: ng || '',
-    // Ghi chú người dùng không được giả dạng dòng huỷ
-    note: textCell(String(body.note || '').replace(/^\s*(huỷ|chuyển)\s/i, '- '), 300), created_by: acc.email, created_at: now,
+    note: textCell(auto ? `${SKIP_NOTE}${note ? ` – ${note}` : ''}` : note, 300), created_by: acc.email, created_at: now,
   })));
   return null;
+}
+
+export const SKIP_NOTE = 'Bù CĐ bỏ qua';
+
+/**
+ * Công đoạn trong tổ bị bỏ trống nằm trước công đoạn có nhập → SL cần ghi bù.
+ * Đi ngược từ công đoạn cuối: need = max SL lũy kế (pallet + lần nhập) của các công đoạn có nhập phía sau;
+ * công đoạn không nhập mà lũy kế < need thì bù phần thiếu. Công đoạn có nhập nhưng ít hơn → không tự sửa (đã có cảnh báo).
+ */
+export function skipFill(teamSteps, perStep, entries) {
+  const got = new Map(entries.map((e) => [e.s?.id ?? e.id, e.qty]));
+  const out = [];
+  let need = 0;
+  for (let i = teamSteps.length - 1; i >= 0; i--) {
+    const s = teamSteps[i];
+    const cur = (perStep[s.id] || 0) + (got.get(s.id) || 0);
+    if (got.has(s.id)) need = Math.max(need, cur);
+    else if (need > cur) out.push({ s, qty: need - cur });
+  }
+  return out.reverse();
 }
 
 async function cancel(body, ctx, acc, t) {

@@ -53,7 +53,13 @@ App cũng nhận dạng ngắn `LSX-02-1626-03-W003-TC` và mã công đoạn `m
 
 ## Giao nhận, Trên chuyền, Sản lượng, Chuyển LSX
 
-Tab dưới đáy: **Quét · Việc · Trên chuyền · Sản lượng · Thêm**. Sáng/tối theo cài đặt điện thoại.
+Tab dưới đáy: **Quét · Việc · Trên chuyền · Sản lượng · Thêm**. Giao diện chọn ở tab Thêm: Theo máy / Sáng / Tối (nhớ theo từng máy).
+
+- **Màn chi tiết sau khi quét**: tổng quan (LSX, SP, cụm, kích thước, nguyên liệu, SL nhận vào / đang làm / đã giao) → cụm, SP (thu gọn)
+  → Pallet đang làm → Pallet đã giao → nút **Nhập sản lượng** (pop-up 3 bước: chọn pallet / pallet mới → nhập song song → xác nhận).
+  Lỗi chặn lưu; cảnh báo phải tick "đã kiểm tra"; server kiểm tra lại.
+- **Nhập nhảy cóc**: công đoạn trong tổ bị bỏ trống mà công đoạn sau (trên cùng pallet) nhiều hơn → hỏi có ghi bù không.
+  Đồng ý → thêm dòng Pallet Log cho công đoạn bị bỏ qua (`note = "Bù CĐ bỏ qua"`), SL = phần thiếu. Công đoạn đã nhập nhưng ít hơn thì không tự sửa, chỉ cảnh báo.
 
 - **Vòng đời pallet**: thống kê tổ A nhập SL (*Đang làm*) → tổ trưởng A **Giao** (*Chờ nhận*, khoá nhập) →
   tổ trưởng tổ sau **Nhận đủ** (*Đã nhận*, tạo pallet cùng số tại tổ sau) hoặc **Trả lại** + lý do (*Trả lại*, về tổ A sửa rồi giao lại).

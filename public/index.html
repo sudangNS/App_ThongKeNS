@@ -11,6 +11,10 @@
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Thống kê NS">
+  <script>
+    /* Giao diện sáng/tối: 'auto' theo điện thoại, hoặc người dùng chọn cố định (áp trước khi vẽ để không nháy màu) */
+    try { var t = JSON.parse(localStorage.getItem('theme') || '"auto"'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) { /* bỏ qua */ }
+  </script>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -78,6 +82,7 @@
       </div>
     </form>
   </dialog>
+  <dialog id="entry" class="sheet-dlg" aria-label="Nhập sản lượng"></dialog>
   <div id="toast" role="status" aria-live="polite"></div>
 
   <script src="/vendor/html5-qrcode.min.js" defer></script>

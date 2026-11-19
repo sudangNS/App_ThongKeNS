@@ -342,3 +342,93 @@ details.tree > .tree-list { padding: 0 12px; }
 /* Nhóm công đoạn ở Trên chuyền: khi mở thì header nổi lên */
 details[open]:not(.tree) > summary { background: var(--brand-soft); color: var(--brand); margin: 0 -14px; padding: 10px 14px; }
 details.waiting[open] > summary { background: var(--warn-soft); color: var(--warn); }
+/* ---------- Màn chi tiết v3: tổng quan, khối thu gọn, pop-up nhập ---------- */
+.sum .code { margin-bottom: 8px; }
+.facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+.fact { min-width: 0; }
+.fact span { display: block; font-size: 12px; color: var(--muted); }
+.fact b { display: block; font-weight: 600; overflow-wrap: anywhere; }
+.flow3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 12px 0 6px; }
+.f3 { border: 1px solid var(--line); border-radius: 10px; padding: 8px 6px; text-align: center; min-width: 0; }
+.f3 span { display: block; font-size: 12px; color: var(--muted); }
+.f3 b { display: block; font-size: 22px; line-height: 1.2; }
+.f3 small { display: block; font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
+.f3.mid { background: var(--brand-soft); border-color: var(--brand); }
+.f3.mid b, .f3.mid span { color: var(--brand); }
+
+/* Khối thu gọn Cụm / Sản phẩm */
+details.card.fold { padding-bottom: 0; }
+details.card.fold > summary.blk-head { margin: 0 -14px; list-style: none; cursor: pointer; border-radius: var(--radius) var(--radius) 0 0; }
+details.card.fold:not([open]) > summary.blk-head { border-radius: var(--radius); margin-bottom: 0; }
+details.card.fold > summary::after { content: none; }
+details.card.fold .chev::after { content: "▾ Xem"; font-size: 12px; font-weight: 700; opacity: .9; }
+details.card.fold[open] .chev::after { content: "▴ Thu gọn"; }
+details.card.fold:not([open]) { padding: 0 14px; }
+.fold-line { padding: 8px 0; }
+details.card.fold:not([open]) .fold-line { display: none; }
+.fold-body { padding-bottom: 14px; }
+details.card.fold[open] > summary:not(.tree-head) { background: unset; }
+details.card.fold[open] > summary.lv-cum { background: var(--lv-cum); color: var(--lv-cum-ink); }
+details.card.fold[open] > summary.lv-sp { background: var(--lv-sp); color: var(--lv-sp-ink); }
+details.card.fold > summary.lv-cum { background: var(--lv-cum); color: var(--lv-cum-ink); }
+details.card.fold > summary.lv-sp { background: var(--lv-sp); color: var(--lv-sp-ink); }
+
+/* Nhật ký thu gọn */
+details.card:not(.fold) > summary { margin: -14px -14px 0; padding: 12px 14px; background: var(--brand-soft); color: var(--brand); }
+details.card:not(.fold)[open] > summary { margin-bottom: 8px; }
+
+.entry-btn { margin: 4px 0 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, .15); }
+
+/* Pop-up dạng sheet */
+dialog.sheet-dlg {
+  width: min(100vw, 560px); max-width: 100vw; max-height: 94vh; margin: auto auto 0; padding: 0;
+  border-radius: 16px 16px 0 0; background: var(--card); color: var(--text);
+}
+@media (min-width: 600px) { dialog.sheet-dlg { margin: auto; border-radius: 16px; } }
+.sheet { display: flex; flex-direction: column; max-height: 94vh; }
+.sheet-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--brand); color: var(--brand-ink); }
+.sheet-x { color: inherit; text-decoration: none; font-size: 20px; min-width: 36px; min-height: 36px; }
+.sheet-title { font-weight: 700; font-size: 17px; }
+.steps-dots { display: flex; align-items: center; gap: 4px; font-size: 12px; opacity: .9; }
+.steps-dots i { width: 22px; height: 4px; border-radius: 2px; background: currentColor; opacity: .35; }
+.steps-dots i.on { opacity: 1; }
+.steps-dots span { margin-left: 6px; }
+.sheet-body { padding: 14px; overflow-y: auto; flex: 1 1 auto; }
+.sheet-foot {
+  display: flex; gap: 8px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line); background: var(--card);
+}
+.pick-list { display: grid; gap: 8px; margin: 8px 0; }
+.pick { display: flex; gap: 10px; align-items: center; border: 2px solid var(--line); border-radius: 12px; padding: 10px 12px; cursor: pointer; }
+.pick.on { border-color: var(--brand); background: var(--brand-soft); }
+.pick input { width: 22px; height: 22px; min-height: 0; accent-color: var(--brand); flex: 0 0 auto; }
+.pick small { display: block; color: var(--muted); }
+.ex-ctx { background: var(--brand-soft); color: var(--brand); border-radius: 8px; padding: 6px 10px; margin-bottom: 10px; }
+
+/* Nhập song song: thông tin công đoạn bên trái – ô số bên phải */
+.erows { margin-top: 10px; }
+.erow { display: grid; grid-template-columns: 1fr 110px; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.erows.ng .erow { grid-template-columns: 1fr 96px 70px; }
+.erow.head { font-size: 12px; color: var(--muted); padding: 4px 0; border-top: 0; }
+.erow.head span:nth-child(n+2) { text-align: right; }
+.einfo b { display: block; }
+.einfo small { display: block; color: var(--muted); font-size: 12px; }
+.erow input { text-align: right; font-size: 20px; font-weight: 700; padding: 8px; }
+.erow input.en { color: var(--bad); font-size: 16px; }
+.erow input:not(:placeholder-shown) { border-color: var(--brand); background: var(--brand-soft); }
+
+.tbl.confirm th { text-align: left; color: var(--muted); font-weight: 500; font-size: 13px; width: 38%; }
+.tbl.confirm td { text-align: left !important; }
+.ex-err { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: var(--bad-soft); color: var(--bad); }
+.ex-warn { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: var(--warn-soft); color: var(--warn); }
+.ex-err ul, .ex-warn ul, .ex-skip ul { margin: 6px 0; padding-left: 18px; }
+.ex-skip { margin-top: 12px; padding: 10px 12px; border-radius: 10px; border: 2px solid var(--warn); background: var(--warn-soft); }
+.ex-skip > b { color: var(--warn); }
+.ex-skip p { margin: 6px 0; color: var(--text); }
+.ex-skip .seg2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.ex-skip .pick { background: var(--card); padding: 8px 10px; }
+.ex-skip .pick.on { background: var(--brand-soft); }
+.tbl.confirm tr.auto th, .tbl.confirm tr.auto td { font-style: italic; }
+.ex-ok { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: var(--brand-soft); color: var(--good); font-weight: 700; }
+.ack { display: flex; gap: 8px; align-items: center; font-weight: 700; color: var(--text); margin-top: 6px; }
+.ack input { width: 22px; height: 22px; min-height: 0; accent-color: var(--brand); }

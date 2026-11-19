@@ -169,6 +169,16 @@ test('trên chuyền: tồn theo SL – đã nhận chưa khai báo nằm ở đ
   assert.equal(r.json.pallets.filter((f) => f.team === 'SC').length, 1);
 });
 
+test('màn chi tiết: SL nhận vào / đang làm / đã giao tại tổ', async () => {
+  const ctx = (await call('scan', { url: `/api/scan?code=${W2}-T-TC`, cookie: await as('admin@ns.vn') })).json;
+  // SC xong Rong 120, nhưng P2 (20) bị trả lại còn ở SC → TC nhận vào 100; TC xong Cắt tinh 50 đã giao LR
+  assert.deepEqual([ctx.stats.inQty, ctx.stats.wip, ctx.stats.outQty], [100, 50, 50]);
+  assert.equal(ctx.stats.fromTeam, 'Tổ Sơ chế');
+  assert.equal(ctx.stats.toTeam, 'Tổ Lắp ráp');
+  const sc = (await call('scan', { url: `/api/scan?code=${W2}-T-SC`, cookie: await as('admin@ns.vn') })).json;
+  assert.deepEqual([sc.stats.inQty, sc.stats.outQty, sc.stats.wip], [120, 100, 20]);
+});
+
 test('sản lượng: tổ tính ở bước ra tổ, suy diễn công đoạn bị bỏ qua', async () => {
   const r = await call('report', { url: '/api/report?period=day', cookie: await as('admin@ns.vn') });
   assert.equal(r.status, 200, JSON.stringify(r.json));
@@ -205,4 +215,37 @@ test('chuyển LSX: cùng BOM, đủ SL, ghi cặp ±, không tính sản lượ
   assert.ok(dst.logs.every((l) => !l.canCancel));
   const after = (await call('report', { url: '/api/report?period=day', cookie: tk })).json.teams.find((x) => x.code === 'SC').cur.ct;
   assert.equal(after, before, 'chuyển LSX không làm thay đổi sản lượng ngày của tổ');
+});
+
+test('nhập nhảy cóc: đồng ý ghi bù các công đoạn bị bỏ qua', async () => {
+  const { skipFill } = await import('../api/output.js');
+  const S = ['a', 'b', 'c', 'd'].map((id, i) => ({ id, no: i + 1 }));
+  // Pallet đã có a=100; nhập d=80 → bù b, c mỗi CĐ 80; a đã đủ
+  assert.deepEqual(skipFill(S, { a: 100 }, [{ id: 'd', qty: 80 }]).map((x) => [x.s.id, x.qty]), [['b', 80], ['c', 80]]);
+  // Có nhập c=50 (ít hơn d) → không tự sửa c, chỉ bù b theo max(c, d)
+  assert.deepEqual(skipFill(S, {}, [{ id: 'c', qty: 50 }, { id: 'd', qty: 60 }]).map((x) => [x.s.id, x.qty]), [['a', 60], ['b', 60]]);
+  // Không nhảy cóc → không bù
+  assert.equal(skipFill(S, { a: 10, b: 10 }, [{ id: 'c', qty: 10 }]).length, 0);
+
+  const tk = await as('tk.sc@ns.vn');
+  const ctx = (await call('scan', { url: `/api/scan?code=${W2}-SC`, cookie: tk })).json;
+  const [s1, s2] = ctx.teamSteps;
+  const n0 = SHEETS['Pallet Log'].length;
+  const r = await call('output', { method: 'POST', cookie: tk, body: { action: 'add', code: `${W2}-SC`, new_pallet: { no: 'NC1' }, entries: [{ id: s2.id, qty: 30 }], fill_skipped: true, confirm: true } });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  const added = SHEETS['Pallet Log'].slice(n0);
+  const hd = SHEETS['Pallet Log'][0];
+  const col = (row, k) => row[hd.indexOf(k)];
+  assert.equal(added.length, 2);
+  const fill = added.find((x) => col(x, 'mo_route_id') === s1.id);
+  assert.equal(Number(col(fill, 'qty')), 30);
+  assert.match(col(fill, 'note'), /^Bù CĐ bỏ qua/);
+  const p = r.json.context.pallets.find((x) => x.no === 'NC1');
+  assert.equal(p.perStep[s1.id], 30);
+  assert.equal(p.perStep[s2.id], 30);
+
+  // Không đồng ý → chỉ lưu đúng dòng đã nhập
+  const n1 = SHEETS['Pallet Log'].length;
+  await call('output', { method: 'POST', cookie: tk, body: { action: 'add', code: `${W2}-SC`, new_pallet: { no: 'NC2' }, entries: [{ id: s2.id, qty: 5 }], confirm: true } });
+  assert.equal(SHEETS['Pallet Log'].length - n1, 1);
 });

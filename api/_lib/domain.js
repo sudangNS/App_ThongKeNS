@@ -1,7 +1,7 @@
 // Nghiệp vụ: giải mã QR, dựng thông tin chi tiết / cụm / sản phẩm, sản lượng theo công đoạn.
 import { HttpError, norm, num, parseDay, vnNow } from './util.js';
 import { teamCoder, teamList, teamIdToCode, canWrite, canLead } from './data.js';
-import { CANCEL_PREFIX, isTransferNote, model, palletFlow, palletBrief } from './flow.js';
+import { CANCEL_PREFIX, isTransferNote, model, palletFlow, palletBrief, production, destOf } from './flow.js';
 
 export { CANCEL_PREFIX };
 export const SCAN_TABLES = ['mo_routing', 'mo', 'mo_detail', 'product', 'bom_wood', 'pallet', 'pallet_log'];
@@ -231,6 +231,26 @@ export function buildContext(t, acc, raw) {
       canFinish: !!f && (out.canLead || out.canWrite) && f.state === 'open' && !f.dest,
     };
   }).sort((a, b) => Number(a.closed) - Number(b.closed) || (parseStamp(b.created_at) > parseStamp(a.created_at) ? 1 : -1));
+
+  // ----- SL tại tổ (cùng cách tính với tab Trên chuyền) -----
+  //  nhận vào = SL công đoạn trước đã xong − phần còn trên pallet chưa giao / chờ nhận ở tổ trước (tổ đầu: SL đã bắt đầu)
+  //  đã giao đi = SL bước ra tổ − phần còn trên pallet chưa giao;  đang làm = nhận vào − đã giao đi
+  const { eff } = production(t, m);
+  const E = (id) => eff.get(id) || 0;
+  const firstS = tSteps[0];
+  const exitS = tSteps[tSteps.length - 1];
+  const prevS = steps[idx(firstS) - 1];
+  const left = (id, st) => flow.filter((f) => f.exitId === id && f.state === st && f.dest).reduce((a, f) => a + f.qtyOut, 0);
+  const inQty = prevS
+    ? Math.max(0, E(prevS.mo_route_id) - left(prevS.mo_route_id, 'open') - left(prevS.mo_route_id, 'waiting'))
+    : E(firstS.mo_route_id);
+  const outQty = Math.max(0, E(exitS.mo_route_id) - left(exitS.mo_route_id, 'open'));
+  const dest = destOf(m.steps.get(exitS.mo_route_id), m);
+  out.stats = {
+    inQty, outQty, wip: Math.max(0, inQty - outQty), required: num(exitS.qty_required),
+    fromTeam: prevS ? teamName(coder(prevS)) : '', fromStage: prevS?.stage || '',
+    toTeam: dest?.teamName || '', toStage: dest?.stage || '', toPart: dest?.kind === 'parent' ? dest.partName : '',
+  };
 
   // Pallet tổ trước đã giao, đang chờ tổ này nhận (chi tiết này, hoặc chi tiết con khi đây là cụm/SP)
   out.incoming = flow

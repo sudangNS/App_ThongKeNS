@@ -1,7 +1,7 @@
 // Service worker: cho phép cài app lên Android/iOS và mở được giao diện khi mạng chập chờn.
 // Không bao giờ cache /api (dữ liệu sản lượng luôn lấy mới từ máy chủ).
 // Tăng VERSION mỗi khi đổi danh sách SHELL.
-const VERSION = 'v3';
+const VERSION = 'v4';
 const CACHE = `tk-shell-${VERSION}`;
 const SHELL = ['/', '/index.html', '/app.js', '/views.js', '/style.css', '/vendor/html5-qrcode.min.js', '/manifest.webmanifest', '/icons/icon-192.png'];
 
